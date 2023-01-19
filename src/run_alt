@@ -1,0 +1,1 @@
+./ALGORAND_SIM_TEST_1 -r 0 -u Cmdenv -c General -n ../src;. omnetpp.ini

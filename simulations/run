@@ -1,0 +1,4 @@
+#!/bin/sh
+cd `dirname $0`
+../src/ALGORAND_SIM_TEST_1 -n .:../src $*
+# for shared lib, use: opp_run -l ../src/ALGORAND_SIM_TEST_1 -n .:../src $*
