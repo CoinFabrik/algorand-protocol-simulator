@@ -2,7 +2,7 @@
 # OMNeT++/OMNEST Makefile for ALGORAND_SIM_TEST_1
 #
 # This file was generated with the command:
-#  opp_makemake -f --deep -I../dependencies/libsodium-win64/include -L../dependencies/libsodium-win64/lib -L../dependencies/libsodium-win64/bin -llibsodium-23
+#  opp_makemake -f --deep -I../dependencies/libsodium-fork/libsodium-win64/include -L../dependencies/libsodium-fork/libsodium-win64/bin -llibsodium-23
 #
 
 # Name of target to be created (-o option)
@@ -19,13 +19,13 @@ USERIF_LIBS = $(ALL_ENV_LIBS) # that is, $(QTENV_LIBS) $(CMDENV_LIBS)
 #USERIF_LIBS = $(QTENV_LIBS)
 
 # C++ include paths (with -I)
-INCLUDE_PATH = -I../dependencies/libsodium-win64/include
+INCLUDE_PATH = -I../dependencies/libsodium-fork/libsodium-win64/include
 
 # Additional object and library files to link with
 EXTRA_OBJS =
 
 # Additional libraries (-L, -l options)
-LIBS = $(LDFLAG_LIBPATH)../dependencies/libsodium-win64/lib $(LDFLAG_LIBPATH)../dependencies/libsodium-win64/bin  -llibsodium-23
+LIBS = $(LDFLAG_LIBPATH)../dependencies/libsodium-fork/libsodium-win64/bin  -llibsodium-23
 
 # Output directory
 PROJECT_OUTPUT_DIR = ../out
@@ -60,7 +60,7 @@ include $(CONFIGFILE)
 # Simulation kernel and user interface libraries
 OMNETPP_LIBS = $(OPPMAIN_LIB) $(USERIF_LIBS) $(KERNEL_LIBS) $(SYS_LIBS)
 ifneq ($(PLATFORM),win32)
-LIBS += -Wl,-rpath,$(abspath ../dependencies/libsodium-win64/lib) -Wl,-rpath,$(abspath ../dependencies/libsodium-win64/bin)
+LIBS += -Wl,-rpath,$(abspath ../dependencies/libsodium-fork/libsodium-win64/bin)
 endif
 
 COPTS = $(CFLAGS) $(IMPORT_DEFINES)  $(INCLUDE_PATH) -I$(OMNETPP_INCL_DIR)

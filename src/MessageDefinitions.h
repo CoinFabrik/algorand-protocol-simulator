@@ -19,24 +19,41 @@
 #include <omnetpp/cmessage.h>
 
 
-class TinyBlockMessage: public omnetpp::cMessage {
+enum ConsensusType{TENTATIVE, FINAL};
+
+
+class AlgorandMessage: public omnetpp::cMessage {
 public:
-    TinyBlockMessage();
-    virtual ~TinyBlockMessage();
+    AlgorandMessage(){}
+    virtual ~AlgorandMessage(){}
+
+protected:
+    short step;
+    uint64_t round;
 };
 
 
-class FullBlockMessage: public omnetpp::cMessage {
+class ProposalMessage: public AlgorandMessage {
+public:
+    ProposalMessage();
+    virtual ~ProposalMessage();
+};
+
+
+class FullBlockMessage: public AlgorandMessage {
 public:
     FullBlockMessage();
     virtual ~FullBlockMessage();
 };
 
 
-class VoteMessage: public omnetpp::cMessage {
+class VoteMessage: public AlgorandMessage {
 public:
     VoteMessage();
     virtual ~VoteMessage();
+
+private:
+    ConsensusType Consensus;
 };
 
 

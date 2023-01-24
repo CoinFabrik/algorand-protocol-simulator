@@ -17,19 +17,35 @@
 #define PARTICIPATIONNODE_H_
 
 #include <omnetpp.h>
-#include <string.h>
-//#include <omnetpp/csimplemodule.h>
 #include <omnetpp/cqueue.h>
-//#include <omnetpp/cmessage.h>
+
+#include <string.h>
 #include <stdlib.h>
+
 #include <sodium.h>
-//#include <boost/math/distributions/binomial.hpp>
+#include "sodium/crypto_vrf.h"
+#include "DataTypeDefinitions.h"
+
+#include <boost/math/distributions/binomial.hpp>
+#include <boost/multiprecision/cpp_int.hpp>
+#include <boost/multiprecision/cpp_bin_float.hpp>
+
+//#include <boost/multiprecision/cpp_int/serialize.hpp>
+//#include <boost/archive/binary_iarchive.hpp>
+//#include <boost/archive/binary_oarchive.hpp>
+//#include <boost/iostreams/device/back_inserter.hpp>
+//#include <boost/iostreams/device/array.hpp>
+//#include <boost/iostreams/stream.hpp>
+
+#include <iostream>
 
 
 using namespace omnetpp;
+typedef boost::multiprecision::cpp_int BigInt;
+//typedef boost::multiprecision::number<boost::multiprecision::cpp_bin_float<64*10+1>> BigFloat;
+typedef boost::multiprecision::number<boost::multiprecision::cpp_bin_float<2048>> BigFloat;
 
 
-typedef unsigned int simpleBlock;
 const simpleBlock EMPTY_HASH = 0;
 const unsigned int TIMEOUT = UINT_MAX;
 
@@ -45,41 +61,24 @@ unsigned int SoftVoteThreshold = 2;
 /*************************/
 
 
-struct Account
-{
-    uint64_t Address;
-    uint64_t money;
-};
+/*************************/
+//PROTOCOL PARAMETERS (from abft.pdf in specs)
+unsigned int SeedLookback = 2;
+unsigned int SeedRefreshInterval = 80;
+unsigned int BalanceLookback = 2*SeedLookback*SeedRefreshInterval;
+
+//time parameters (in seconds). TODO: darles nombres mas descriptivos
+float Lambda = 2.f;
+float Lambda0 = 1.7f;
+float LambdaF = 5.f * 60.f; //5 min
+float UppercaseLambda = 17.f;
+
+inline float FilterTimeout(unsigned int p){return 2.f * (p==0? Lambda0 : Lambda);}
+/*************************/
 
 
-struct VRFOutput
-{
-    char VrfPrivkey[64];
-    char VrfPubkey[32];
-    char VRFProof[80];
-    char VRFHash[64];
-};
 
 
-struct Ledger
-{
-    std::vector<unsigned int> blocks;
-};
-
-
-//uint64_t sortition_binomial_cdf_walk(double n, double p, double ratio, uint64_t money)
-//{
-//  boost::math::binomial_distribution<double> dist(n, p);
-//  for (uint64_t j = 0; j < money; j++)
-//  {
-//      // Get the cdf
-//      double boundary = cdf(dist, j);
-//
-//      // Found the correct boundary, break
-//      if (ratio <= boundary) return j;
-//  }
-//  return money;
-//}
 
 
 class ParticipationNode: public cSimpleModule
@@ -98,8 +97,15 @@ public:
 
     //node specific helper functions
     void Gossip(cMessage* m);
-//    uint64_t Sortition(uint64_t money, uint64_t totalMoney, double expectedSize, vrfOutput crypto.Digest);
-    int VerifySortition();
+
+    BigFloat two_to_the_hashlen;
+    VRFOutput RunVRF(Account& a, uint8_t* SeedAndRole);
+    uint64_t sortition_binomial_cdf_walk(double n, double p, double ratio, uint64_t money);
+    uint64_t Sortition(Account& a, uint64_t totalMoney, double expectedSize, VRFOutput& cryptoDigest);
+    boost::multiprecision::cpp_int byte_array_to_cpp_int(unsigned char* n, uint64_t size);
+    uint64_t VerifySortition();
+
+
     simpleBlock ProcessMessage(cMessage* msg);
     void CommitteeVote(const simpleBlock& hblock);
     simpleBlock CountVotes();

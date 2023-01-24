@@ -20,6 +20,9 @@ Define_Module(ParticipationNode);
 ParticipationNode::ParticipationNode():cSimpleModule(4096)
 {
     currentRound = 0;
+
+    //initialize constant for sortition
+    two_to_the_hashlen = boost::multiprecision::pow(BigFloat(2.0), (64*8)+1);
 }
 
 
@@ -31,10 +34,22 @@ ParticipationNode::~ParticipationNode()
 
 void ParticipationNode::initialize()
 {
-
     if (sodium_init() < 0)
     {
+        EV << "ERROR INITIALIZING SODIUM" << endl;
         return;
+    }
+
+
+    //init 100 online accounts
+    for(int i = 0; i < 100; i++)
+    {
+        Account a;
+        a.Money = 1;
+        crypto_vrf_keypair(a.VRFKeys.VRFPubKey, a.VRFKeys.VRFPrivKey);
+        OnlineAccounts.push_back(a);
+
+        //EV << i << " ------ " << a.VRFKeys.VRFPubKey << endl;
     }
 }
 
@@ -42,16 +57,95 @@ void ParticipationNode::initialize()
 //TODO: llevar una cuenta de los mensajes recibidos y gossipeados en un determinado round
 //solo puedo devolver mensaje UNA VEZ
 
-//uint64_t ParticipationNode::sortition(uint64_t money, uint64_t totalMoney, double expectedSize, vrfOutput crypto.Digest)
-//{
-//    double binomialN = double(money);
-//}
+
+VRFOutput ParticipationNode::RunVRF(Account& a, unsigned char* SeedAndRole)
+{
+    VRFOutput cryptoDigest;
+
+    crypto_vrf_prove(cryptoDigest.VRFProof, a.VRFKeys.VRFPrivKey, SeedAndRole, 21);
+    //retorna -1 si hay error decodificando la llave secreta, 0 si todo bien
+    crypto_vrf_proof_to_hash(cryptoDigest.VRFHash, cryptoDigest.VRFProof);
+
+    return cryptoDigest;
+}
+
+
+uint64_t ParticipationNode::sortition_binomial_cdf_walk(double n, double p, double ratio, uint64_t money)
+{
+  boost::math::binomial_distribution<double> dist(n, p);
+  for (uint64_t j = 0; j < money; j++)
+  {
+      // Get the cdf
+      double boundary = cdf(dist, j);
+
+      // Found the correct boundary, break
+      if (ratio <= boundary) return j;
+  }
+  return money;
+}
+
+
+BigInt ParticipationNode::byte_array_to_cpp_int(unsigned char* n, uint64_t len)
+{
+    BigInt i;
+    uint32_t size = (uint32_t)len / sizeof(boost::multiprecision::limb_type);
+    i.backend().resize(size, size);
+    memcpy(i.backend().limbs(), n, size);
+    i.backend().normalize();
+
+    EV << "Pre-converted: ";
+    for (int k = 0; k < len; k++)
+        EV << std::hex << int(n[k]);
+
+    EV << endl << "Converted INT: " << std::hex << i << endl;
+
+    return i;
+
+
+//    namespace io = boost::iostreams;
+//    namespace ba = boost::archive;
+//
+//    boost::multiprecision::cpp_int i;
+//    {
+//        std::vector<char> chars{&n[0], &n[size-1]};
+//        io::stream_buffer<io::array_source> bb(chars.data(), size);
+//        ba::binary_iarchive ia(bb, ba::no_header | ba::no_tracking | ba::no_codecvt);
+//        ia >> i;
+//    }
+//    return i;
+}
+
+
+uint64_t ParticipationNode::Sortition(Account& a, uint64_t totalMoney, double expectedSize, VRFOutput& cryptoDigest)
+{
+    std::string seed = "00000000000000000000============";
+    std::string role = "0";
+    std::string m = seed + role;
+
+    cryptoDigest = RunVRF(a, (unsigned char*)(m.c_str()));
+
+
+    double binomialN = double(a.Money);
+    double binomialP = expectedSize / double(totalMoney);
+
+    BigInt t = byte_array_to_cpp_int(cryptoDigest.VRFHash, 64);
+    double ratio = (BigFloat(t) / two_to_the_hashlen).convert_to<double>();
+
+//    EV << "INT: " << t << endl;
+//    EV << "FLOAT: " << BigFloat(t) << endl;
+//    EV << ratio << endl;
+
+    return sortition_binomial_cdf_walk(binomialN, binomialP, ratio, a.Money);
+}
 
 
 simpleBlock ParticipationNode::BlockProposal()
 {
+    VRFOutput VRFOut;
+    for (int i = 0; i < 10; i++)
+        Sortition(OnlineAccounts[i], 1000, 10, VRFOut);
+
     //TODO in this function:
-    //implement sortition
     //implement sortition validation
     //implement block structures
     //implement 2 kinds of proposal messages (full block, brief version)
