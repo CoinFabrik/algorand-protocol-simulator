@@ -16,34 +16,31 @@
 #ifndef PARTICIPATIONNODE_H_
 #define PARTICIPATIONNODE_H_
 
+//OMNET includes
 #include <omnetpp.h>
 #include <omnetpp/cqueue.h>
-
-#include <string.h>
-#include <stdlib.h>
-
-#include <sodium.h>
-#include "sodium/crypto_vrf.h"
 #include "DataTypeDefinitions.h"
 
+//C/C++ standard includes
+#include <iostream>
+#include <string.h>
+#include <stdlib.h>
+#include <algorithm>
+
+//sodium library includes
+#include <sodium.h>
+#include "sodium/crypto_vrf.h"
+
+//boost includes
 #include <boost/math/distributions/binomial.hpp>
 #include <boost/multiprecision/cpp_int.hpp>
 #include <boost/multiprecision/cpp_bin_float.hpp>
 
-//#include <boost/multiprecision/cpp_int/serialize.hpp>
-//#include <boost/archive/binary_iarchive.hpp>
-//#include <boost/archive/binary_oarchive.hpp>
-//#include <boost/iostreams/device/back_inserter.hpp>
-//#include <boost/iostreams/device/array.hpp>
-//#include <boost/iostreams/stream.hpp>
-
-#include <iostream>
-
-
 using namespace omnetpp;
+
 typedef boost::multiprecision::cpp_int BigInt;
 //typedef boost::multiprecision::number<boost::multiprecision::cpp_bin_float<64*10+1>> BigFloat;
-typedef boost::multiprecision::number<boost::multiprecision::cpp_bin_float<2048>> BigFloat;
+typedef boost::multiprecision::number<boost::multiprecision::cpp_bin_float<2048>> BigFloat;   //VER! Es necesaria tanta precisión?
 
 
 const simpleBlock EMPTY_HASH = 0;
@@ -61,7 +58,7 @@ unsigned int SoftVoteThreshold = 2;
 /*************************/
 
 
-/*************************/
+/**********************************************************************************/
 //PROTOCOL PARAMETERS (from abft.pdf in specs)
 unsigned int SeedLookback = 2;
 unsigned int SeedRefreshInterval = 80;
@@ -74,7 +71,7 @@ float LambdaF = 5.f * 60.f; //5 min
 float UppercaseLambda = 17.f;
 
 inline float FilterTimeout(unsigned int p){return 2.f * (p==0? Lambda0 : Lambda);}
-/*************************/
+/**********************************************************************************/
 
 
 
@@ -97,12 +94,15 @@ public:
 
     //node specific helper functions
     void Gossip(cMessage* m);
+    void DeriveSeed();
+    void Hash_SHA512_256();  //implement SHA512/256
 
-    BigFloat two_to_the_hashlen;
-    VRFOutput RunVRF(Account& a, uint8_t* SeedAndRole);
+    //sortition functions
+    VRFOutput RunVRF(Account& a, unsigned char* SeedAndRole);
+    bool VerifyVRF(Account& a, unsigned char* SeedAndRole, VRFOutput& HashAndProof);
     uint64_t sortition_binomial_cdf_walk(double n, double p, double ratio, uint64_t money);
     uint64_t Sortition(Account& a, uint64_t totalMoney, double expectedSize, VRFOutput& cryptoDigest);
-    boost::multiprecision::cpp_int byte_array_to_cpp_int(unsigned char* n, uint64_t size);
+    BigInt byte_array_to_cpp_int(unsigned char* n, uint64_t size);
     uint64_t VerifySortition();
 
 
@@ -118,12 +118,17 @@ public:
 
 
 protected:
+    BigFloat two_to_the_hashlen; //constant for sortition
+
+
     Ledger LocalLedgerCopy;
     uint64_t currentRound;
 
 
     std::vector<Account> OnlineAccounts;
     //cQueue UnprocessedMessages;
+
+    NewLedger Ledger;
 };
 
 

@@ -45,11 +45,43 @@ void ParticipationNode::initialize()
     for(int i = 0; i < 100; i++)
     {
         Account a;
-        a.Money = 1;
+        a.Money = 100000;  //microalgos
         crypto_vrf_keypair(a.VRFKeys.VRFPubKey, a.VRFKeys.VRFPrivKey);
         OnlineAccounts.push_back(a);
 
-        //EV << i << " ------ " << a.VRFKeys.VRFPubKey << endl;
+//        EV << i << " ------ " << std::hex << a.VRFKeys.VRFPubKey << endl;
+//        EV << i << " ------ " << std::hex << a.VRFKeys.VRFPrivKey << endl;
+    }
+}
+
+
+void ParticipationNode::DeriveSeed(Account& a, unsigned int period, unsigned int step, unsigned int round)
+{
+    VRFOutput SeedHashAndProof;
+    unsigned char* PrevHash = "0000";
+
+    if (period == 0)
+    {
+        //auto PrevSeed = "0";
+        //auto y = crypto_vrf_prove(SeedHashAndProof.VRFProof, a.VRFKeys.VRFPrivKey, PrevSeed, 64);
+        //crypto_vrf_proof_to_hash(SeedHashAndProof.VRFHash, SeedHashAndProof.VRFProof);
+
+        //auto alpha = Hash_SHA512_256(SeedHashAndProof.VRFHash, a.Address);
+    }
+    else
+    {
+        auto y = 0;
+        //auto alpha = Hash_SHA512_256(PrevSeed);
+    }
+
+    unsigned char* OutSeed;
+    if (round % SeedLookback*SeedRefreshInterval < SeedLookback)
+    {
+        //OutSeed = H()
+    }
+    else
+    {
+        //OutSeed = Hash_SHA512_256(alpha);
     }
 }
 
@@ -62,11 +94,17 @@ VRFOutput ParticipationNode::RunVRF(Account& a, unsigned char* SeedAndRole)
 {
     VRFOutput cryptoDigest;
 
-    crypto_vrf_prove(cryptoDigest.VRFProof, a.VRFKeys.VRFPrivKey, SeedAndRole, 21);
-    //retorna -1 si hay error decodificando la llave secreta, 0 si todo bien
+    crypto_vrf_prove(cryptoDigest.VRFProof, a.VRFKeys.VRFPrivKey, SeedAndRole, 65);
+    //retorna -1 si hay error decodificando la llave secreta, 0 si OK
     crypto_vrf_proof_to_hash(cryptoDigest.VRFHash, cryptoDigest.VRFProof);
 
     return cryptoDigest;
+}
+
+
+bool ParticipationNode::VerifyVRF(Account& a, unsigned char* SeedAndRole, VRFOutput& HashAndProof)
+{
+    return crypto_vrf_verify(HashAndProof.VRFHash, a.VRFKeys.VRFPubKey, HashAndProof.VRFProof, SeedAndRole, 65) == 0;
 }
 
 
@@ -90,29 +128,13 @@ BigInt ParticipationNode::byte_array_to_cpp_int(unsigned char* n, uint64_t len)
     BigInt i;
     uint32_t size = (uint32_t)len / sizeof(boost::multiprecision::limb_type);
     i.backend().resize(size, size);
-    memcpy(i.backend().limbs(), n, size);
+
+    unsigned char reverse_n[64];
+    std::reverse_copy(n, n + len, reverse_n);
+    memcpy(i.backend().limbs(), reverse_n, len);
     i.backend().normalize();
 
-    EV << "Pre-converted: ";
-    for (int k = 0; k < len; k++)
-        EV << std::hex << int(n[k]);
-
-    EV << endl << "Converted INT: " << std::hex << i << endl;
-
     return i;
-
-
-//    namespace io = boost::iostreams;
-//    namespace ba = boost::archive;
-//
-//    boost::multiprecision::cpp_int i;
-//    {
-//        std::vector<char> chars{&n[0], &n[size-1]};
-//        io::stream_buffer<io::array_source> bb(chars.data(), size);
-//        ba::binary_iarchive ia(bb, ba::no_header | ba::no_tracking | ba::no_codecvt);
-//        ia >> i;
-//    }
-//    return i;
 }
 
 
@@ -142,8 +164,11 @@ uint64_t ParticipationNode::Sortition(Account& a, uint64_t totalMoney, double ex
 simpleBlock ParticipationNode::BlockProposal()
 {
     VRFOutput VRFOut;
-    for (int i = 0; i < 10; i++)
-        Sortition(OnlineAccounts[i], 1000, 10, VRFOut);
+    for (int i = 0; i < 100; i++)
+    {
+        uint64_t SortitionOutput = Sortition(OnlineAccounts[i], 300000, 20, VRFOut);
+        EV << "SortOutput : " << SortitionOutput << endl;
+    }
 
     //TODO in this function:
     //implement sortition validation
