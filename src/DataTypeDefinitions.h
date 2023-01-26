@@ -44,16 +44,26 @@ struct LedgerEntry
 {
     //o is some opaque object O
     unsigned char* Obj;
-    uint256_t Seed;  //Q
+    unsigned char* Seed; //uint256_t Seed;  //Q
+
+    LedgerEntry()
+    {
+        Seed = new unsigned char[32];
+    }
+
+    ~LedgerEntry()
+    {
+        delete[] Seed; Seed = nullptr;
+    }
 
     unsigned char* Encoding()
     {
         return nullptr;
     }
 
-    uint256_t Digest()
+    unsigned char* Digest() //uint256_t Digest()
     {
-        return 0;
+        return nullptr;
     }
 };
 
@@ -61,9 +71,9 @@ struct LedgerEntry
 struct NewLedger
 {
     bool ValidEntry(LedgerEntry e){return true; }
-    uint256_t SeedLookup(uint64_t round){return Entries[round].Seed;}
+    unsigned char* SeedLookup(uint64_t round){return Entries[round].Seed;}
     //TODO RecordLookup
-    uint256_t DigestLookup(uint64_t round){return Entries[round].Digest();}
+    unsigned char* DigestLookup(uint64_t round){return Entries[round].Digest();} //uint256_t DigestLookup(uint64_t round){return Entries[round].Digest();}
     //TODO TotalStakeLookup
 
 

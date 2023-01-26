@@ -92,25 +92,39 @@ public:
 
 
 
-    //node specific helper functions
+    //broadcasting functions
     void Gossip(cMessage* m);
-    void DeriveSeed();
-    void Hash_SHA512_256();  //implement SHA512/256
+
+
+    //signature functions
+    void Sign(Account& a, unsigned char* data, unsigned char* outSignedData);
+    uint64_t VerifySignature(unsigned char* SignedData, unsigned char* PK); //outputs the "weight" of signature
+
+
+    //multipurpose cryptographic hash
+    inline void Hash_SHA512(unsigned char* out, unsigned char* in, uint64_t len){crypto_hash_sha512(out, in, len);}
+
+
+    //seed computation and verification
+    void DeriveSeed(unsigned char* SeedHash, unsigned char* SeedProof, Account& a, unsigned int period, unsigned int step, unsigned int round);
+    bool VerifySeed();
+
 
     //sortition functions
-    VRFOutput RunVRF(Account& a, unsigned char* SeedAndRole);
-    bool VerifyVRF(Account& a, unsigned char* SeedAndRole, VRFOutput& HashAndProof);
+    VRFOutput RunVRF(Account& a, unsigned char* bytes, uint64_t bytesLen);
+    bool VerifyVRF(Account& a, unsigned char* bytes, uint64_t bytesLen, VRFOutput& HashAndProof);
     uint64_t sortition_binomial_cdf_walk(double n, double p, double ratio, uint64_t money);
     uint64_t Sortition(Account& a, uint64_t totalMoney, double expectedSize, VRFOutput& cryptoDigest);
     BigInt byte_array_to_cpp_int(unsigned char* n, uint64_t size);
     uint64_t VerifySortition();
 
 
+    //main algorithm subroutines
     simpleBlock ProcessMessage(cMessage* msg);
     void CommitteeVote(const simpleBlock& hblock);
     simpleBlock CountVotes();
 
-    //node specific main functions
+    //main algorithm functions
     simpleBlock BlockProposal();
     simpleBlock SoftVote(const simpleBlock& hblock);
     simpleBlock CertifyVote(const simpleBlock& hblock);

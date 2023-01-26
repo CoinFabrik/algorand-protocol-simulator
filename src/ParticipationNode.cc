@@ -55,34 +55,41 @@ void ParticipationNode::initialize()
 }
 
 
-void ParticipationNode::DeriveSeed(Account& a, unsigned int period, unsigned int step, unsigned int round)
+void ParticipationNode::DeriveSeed(unsigned char* SeedHash, unsigned char* SeedProof, Account& a, unsigned int period, unsigned int step, unsigned int round)
 {
-    VRFOutput SeedHashAndProof;
-    unsigned char* PrevHash = "0000";
+    unsigned char* PrevSeed = Ledger.SeedLookup(round - SeedLookback);
+    unsigned char alpha[64];
 
+    //compute seed proof and preliminary hash
     if (period == 0)
     {
-        //auto PrevSeed = "0";
-        //auto y = crypto_vrf_prove(SeedHashAndProof.VRFProof, a.VRFKeys.VRFPrivKey, PrevSeed, 64);
-        //crypto_vrf_proof_to_hash(SeedHashAndProof.VRFHash, SeedHashAndProof.VRFProof);
-
-        //auto alpha = Hash_SHA512_256(SeedHashAndProof.VRFHash, a.Address);
+//        VRFOutput VRFOutSeed = RunVRF(a, PrevSeed, 32);
+//        SeedHash = VRFOutSeed.VRFHash;
+//        SeedProof = VRFOutSeed.VRFProof;
+//
+//        std::string VRFConcatAddress = std::string(&VRFOutSeed.VRFHash[0], &VRFOutSeed.VRFHash[64]) + std::itos(a.Address);
+//        Hash_SHA512(alpha, (unsigned char*)(VRFConcatAddress.c_str()), VRFConcatAddress.size());
     }
     else
     {
-        auto y = 0;
-        //auto alpha = Hash_SHA512_256(PrevSeed);
+//        SeedProof = {0};
+//        Hash_SHA512(alpha, PrevSeed, 32);
     }
 
-    unsigned char* OutSeed;
+
+    //compute actual seed
     if (round % SeedLookback*SeedRefreshInterval < SeedLookback)
     {
-        //OutSeed = H()
+//        std::string alphaConcatDigestLookup = std::string(&alpha[0], &alpha[64]) + std::string(Ledger.DigestLookup(round - SeedLookback*SeedRefreshInterval));
+//        Hash_SHA512(SeedHash, (unsigned char*)(alphaConcatDigestLookup.c_str()), alphaConcatDigestlookup.size());
     }
-    else
-    {
-        //OutSeed = Hash_SHA512_256(alpha);
-    }
+//    else Hash_SHA512(SeedHash, alpha, 64);
+}
+
+
+bool ParticipationNode::VerifySeed()
+{
+     return true;
 }
 
 
@@ -90,11 +97,11 @@ void ParticipationNode::DeriveSeed(Account& a, unsigned int period, unsigned int
 //solo puedo devolver mensaje UNA VEZ
 
 
-VRFOutput ParticipationNode::RunVRF(Account& a, unsigned char* SeedAndRole)
+VRFOutput ParticipationNode::RunVRF(Account& a, unsigned char* bytes, uint64_t bytesLen)
 {
     VRFOutput cryptoDigest;
 
-    crypto_vrf_prove(cryptoDigest.VRFProof, a.VRFKeys.VRFPrivKey, SeedAndRole, 65);
+    crypto_vrf_prove(cryptoDigest.VRFProof, a.VRFKeys.VRFPrivKey, bytes, bytesLen);
     //retorna -1 si hay error decodificando la llave secreta, 0 si OK
     crypto_vrf_proof_to_hash(cryptoDigest.VRFHash, cryptoDigest.VRFProof);
 
@@ -102,9 +109,9 @@ VRFOutput ParticipationNode::RunVRF(Account& a, unsigned char* SeedAndRole)
 }
 
 
-bool ParticipationNode::VerifyVRF(Account& a, unsigned char* SeedAndRole, VRFOutput& HashAndProof)
+bool ParticipationNode::VerifyVRF(Account& a, unsigned char* bytes, uint64_t bytesLen, VRFOutput& HashAndProof)
 {
-    return crypto_vrf_verify(HashAndProof.VRFHash, a.VRFKeys.VRFPubKey, HashAndProof.VRFProof, SeedAndRole, 65) == 0;
+    return crypto_vrf_verify(HashAndProof.VRFHash, a.VRFKeys.VRFPubKey, HashAndProof.VRFProof, bytes, bytesLen) == 0;
 }
 
 
@@ -144,7 +151,7 @@ uint64_t ParticipationNode::Sortition(Account& a, uint64_t totalMoney, double ex
     std::string role = "0";
     std::string m = seed + role;
 
-    cryptoDigest = RunVRF(a, (unsigned char*)(m.c_str()));
+    cryptoDigest = RunVRF(a, (unsigned char*)(m.c_str()), 65);
 
 
     double binomialN = double(a.Money);
@@ -152,10 +159,6 @@ uint64_t ParticipationNode::Sortition(Account& a, uint64_t totalMoney, double ex
 
     BigInt t = byte_array_to_cpp_int(cryptoDigest.VRFHash, 64);
     double ratio = (BigFloat(t) / two_to_the_hashlen).convert_to<double>();
-
-//    EV << "INT: " << t << endl;
-//    EV << "FLOAT: " << BigFloat(t) << endl;
-//    EV << ratio << endl;
 
     return sortition_binomial_cdf_walk(binomialN, binomialP, ratio, a.Money);
 }
