@@ -1,3 +1,3 @@
-package borrar.simulations;
+package algorandprotocolsimulator.simulations;
 
 @license(LGPL);

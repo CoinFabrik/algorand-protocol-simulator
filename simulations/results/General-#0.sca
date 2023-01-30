@@ -1,0 +1,64 @@
+version 3
+run General-0-20230130-19:28:57-440
+attr configname General
+attr datetime 20230130-19:28:57
+attr datetimef 20230130-192857
+attr experiment General
+attr inifile omnetpp.ini
+attr iterationvars ""
+attr iterationvarsd ""
+attr iterationvarsf ""
+attr measurement ""
+attr network AlgorandNetwork
+attr processid 440
+attr repetition 0
+attr replication #0
+attr resultdir results
+attr runnumber 0
+attr seedset 0
+config network AlgorandNetwork
+
+par AlgorandNetwork.RelayNode[0].gate$o[0].channel typename "\"ned.DelayChannel\""
+par AlgorandNetwork.RelayNode[0].gate$o[0].channel disabled false
+attr mutable ""
+par AlgorandNetwork.RelayNode[0].gate$o[0].channel delay 0.05s
+attr mutable ""
+attr unit s
+par AlgorandNetwork.PartNode[0].gate$o[0].channel typename "\"ned.DelayChannel\""
+par AlgorandNetwork.PartNode[0].gate$o[0].channel disabled false
+attr mutable ""
+par AlgorandNetwork.PartNode[0].gate$o[0].channel delay 0.05s
+attr mutable ""
+attr unit s
+par AlgorandNetwork.RelayNode[0].gate$o[1].channel typename "\"ned.DelayChannel\""
+par AlgorandNetwork.RelayNode[0].gate$o[1].channel disabled false
+attr mutable ""
+par AlgorandNetwork.RelayNode[0].gate$o[1].channel delay 0.05s
+attr mutable ""
+attr unit s
+par AlgorandNetwork.PartNode[1].gate$o[0].channel typename "\"ned.DelayChannel\""
+par AlgorandNetwork.PartNode[1].gate$o[0].channel disabled false
+attr mutable ""
+par AlgorandNetwork.PartNode[1].gate$o[0].channel delay 0.05s
+attr mutable ""
+attr unit s
+par AlgorandNetwork.RelayNode[0].gate$o[2].channel typename "\"ned.DelayChannel\""
+par AlgorandNetwork.RelayNode[0].gate$o[2].channel disabled false
+attr mutable ""
+par AlgorandNetwork.RelayNode[0].gate$o[2].channel delay 0.05s
+attr mutable ""
+attr unit s
+par AlgorandNetwork.PartNode[2].gate$o[0].channel typename "\"ned.DelayChannel\""
+par AlgorandNetwork.PartNode[2].gate$o[0].channel disabled false
+attr mutable ""
+par AlgorandNetwork.PartNode[2].gate$o[0].channel delay 0.05s
+attr mutable ""
+attr unit s
+par AlgorandNetwork.PartNode[0] typename "\"ParticipationNode\""
+par AlgorandNetwork.PartNode[1] typename "\"ParticipationNode\""
+par AlgorandNetwork.PartNode[2] typename "\"ParticipationNode\""
+par AlgorandNetwork.RelayNode[0] typename "\"RelayNode\""
+par AlgorandNetwork typename "\"AlgorandNetwork\""
+par AlgorandNetwork partCount 3
+par AlgorandNetwork relCount 1
+
