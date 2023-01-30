@@ -59,7 +59,6 @@ libsodium-nativeclient-*
 libsodium-osx
 libsodium-uninstalled.pc
 libsodium-win32
-libsodium-win64
 libsodium.pc
 libtool
 ltmain.sh
