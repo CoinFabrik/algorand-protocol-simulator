@@ -22,7 +22,7 @@ ParticipationNode::ParticipationNode():cSimpleModule(4096)
     currentRound = 0;
 
     //initialize constant for sortition
-    two_to_the_hashlen = boost::multiprecision::pow(BigFloat(2.0), (64*8)+1);
+    two_to_the_hashlen = boost::multiprecision::pow(BigFloat(2.0), 64*8);
 }
 
 
@@ -34,10 +34,11 @@ ParticipationNode::~ParticipationNode()
 
 void ParticipationNode::initialize()
 {
+    //initialize sodium library
     if (sodium_init() < 0)
     {
-        EV << "ERROR INITIALIZING SODIUM" << endl;
-        return;
+        EV << "Error initializing sodium. Finishing simulation..." << endl;
+        finish();
     }
 
 
@@ -52,38 +53,68 @@ void ParticipationNode::initialize()
 //        EV << i << " ------ " << std::hex << a.VRFKeys.VRFPubKey << endl;
 //        EV << i << " ------ " << std::hex << a.VRFKeys.VRFPrivKey << endl;
     }
+
+    AddGenesisBlock();
+    InitBalanceTracker();
 }
 
 
-void ParticipationNode::DeriveSeed(unsigned char* SeedHash, unsigned char* SeedProof, Account& a, unsigned int period, unsigned int step, unsigned int round)
+void ParticipationNode::AddGenesisBlock()
 {
-    unsigned char* PrevSeed = Ledger.SeedLookup(round - SeedLookback);
-    unsigned char alpha[64];
+    LedgerEntry e;
+    e.SeedAndProof.Seed = "hgyurteydhsjaskeudiaoapdlfkruiu9";
+    Ledger.Entries.push_back(e);
+    currentRound = 1;
+}
+
+
+void ParticipationNode::InitBalanceTracker()
+{
+
+}
+
+
+
+
+void ParticipationNode::DeriveSeed(stSeedAndProof& SeedAndProof, Account& a, unsigned int period, unsigned int round)
+{
+    //unsigned char* PrevSeed = Ledger.SeedLookup(round - SeedLookback);
+    //SEED LOOKUP NO IMPLEMENTADA! Por ahora:
+    unsigned char* PrevSeed = new unsigned char[32];
+
+    unsigned char alpha[crypto_hash_sha256_BYTES];
 
     //compute seed proof and preliminary hash
     if (period == 0)
     {
-//        VRFOutput VRFOutSeed = RunVRF(a, PrevSeed, 32);
-//        SeedHash = VRFOutSeed.VRFHash;
-//        SeedProof = VRFOutSeed.VRFProof;
-//
-//        std::string VRFConcatAddress = std::string(&VRFOutSeed.VRFHash[0], &VRFOutSeed.VRFHash[64]) + std::itos(a.Address);
-//        Hash_SHA512(alpha, (unsigned char*)(VRFConcatAddress.c_str()), VRFConcatAddress.size());
+        VRFOutput VRFOutSeed = RunVRF(a, PrevSeed, 32);
+        std::memcpy(&SeedAndProof.Seed, &VRFOutSeed.VRFHash[0], 32); //VER. Por ahora, me quedo con los 32 bytes menos significativos
+        std::memcpy(&SeedAndProof.Proof, &VRFOutSeed.VRFProof[0], 80);
+
+        std::string VRFConcatAddress = std::string(&VRFOutSeed.VRFHash[0], &VRFOutSeed.VRFHash[64]); //+ std::to_string(a.AccountAddress);
+        Hash_SHA256(alpha, (unsigned char*)(VRFConcatAddress.c_str()), VRFConcatAddress.size());
     }
     else
     {
-//        SeedProof = {0};
-//        Hash_SHA512(alpha, PrevSeed, 32);
+        ///SeedAndProof.Proof = {0};
+        Hash_SHA256(alpha, PrevSeed, 32);
     }
-
 
     //compute actual seed
     if (round % SeedLookback*SeedRefreshInterval < SeedLookback)
     {
-//        std::string alphaConcatDigestLookup = std::string(&alpha[0], &alpha[64]) + std::string(Ledger.DigestLookup(round - SeedLookback*SeedRefreshInterval));
-//        Hash_SHA512(SeedHash, (unsigned char*)(alphaConcatDigestLookup.c_str()), alphaConcatDigestlookup.size());
+        //std::string alphaConcatDigestLookup = std::string((char*)(alpha)) + std::string((char*)(Ledger.DigestLookup(round - SeedLookback*SeedRefreshInterval)));
+        //DIGEST LOOKUP NO IMPLEMENTADA! Por ahora:
+        std::string alphaConcatDigestLookup = std::string((char*)(alpha)) + std::string("00000000000000000000000000000000");
+
+        Hash_SHA256((unsigned char*)(SeedAndProof.Seed.c_str()), (unsigned char*)(alphaConcatDigestLookup.c_str()), alphaConcatDigestLookup.size());
     }
-//    else Hash_SHA512(SeedHash, alpha, 64);
+    else Hash_SHA256((unsigned char*)(SeedAndProof.Seed.c_str()), alpha, 32);
+
+
+
+
+    delete[] PrevSeed;
 }
 
 
@@ -130,28 +161,13 @@ uint64_t ParticipationNode::sortition_binomial_cdf_walk(double n, double p, doub
 }
 
 
-BigInt ParticipationNode::byte_array_to_cpp_int(unsigned char* n, uint64_t len)
-{
-    BigInt i;
-    uint32_t size = (uint32_t)len / sizeof(boost::multiprecision::limb_type);
-    i.backend().resize(size, size);
-
-    unsigned char reverse_n[64];
-    std::reverse_copy(n, n + len, reverse_n);
-    memcpy(i.backend().limbs(), reverse_n, len);
-    i.backend().normalize();
-
-    return i;
-}
-
-
-uint64_t ParticipationNode::Sortition(Account& a, uint64_t totalMoney, double expectedSize, VRFOutput& cryptoDigest)
+uint64_t ParticipationNode::Sortition(Account& a, uint64_t totalMoney, double expectedSize, VRFOutput& cryptoDigest, short Step)
 {
     std::string seed = "00000000000000000000============";
-    std::string role = "0";
+    std::string role = std::to_string(Step);
     std::string m = seed + role;
 
-    cryptoDigest = RunVRF(a, (unsigned char*)(m.c_str()), 65);
+    cryptoDigest = RunVRF(a, (unsigned char*)(m.c_str()), m.length());
 
 
     double binomialN = double(a.Money);
@@ -164,52 +180,96 @@ uint64_t ParticipationNode::Sortition(Account& a, uint64_t totalMoney, double ex
 }
 
 
+LedgerEntry* ParticipationNode::MakeBlock()
+{
+
+    return nullptr;
+}
+
+
+uint64_t ParticipationNode::TotalStakedAlgos()
+{
+    return 30000000;
+}
+
+
 simpleBlock ParticipationNode::BlockProposal()
 {
-    VRFOutput VRFOut;
-    for (int i = 0; i < 100; i++)
+//    LedgerEntry* Block = MakeBlock();
+    simpleBlock BP_SelectedBlock = (rand() % 100);
+
+
+
+
+    uint64_t TotalStake = TotalStakedAlgos();
+    BigInt LowestHash = BigInt(two_to_the_hashlen);
+    for (Account& a : OnlineAccounts)
     {
-        uint64_t SortitionOutput = Sortition(OnlineAccounts[i], 300000, 20, VRFOut);
-        EV << "SortOutput : " << SortitionOutput << endl;
+        VRFOutput VRFOut;
+        uint64_t j = Sortition(a, TotalStake, CommitteeSize(0), VRFOut, 0);
+
+
+//        si la cuenta fue seleccionada al menos una vez
+//        unsigned char Hash_str[crypto_hash_sha512_BYTES] = {0};
+//        while (j > 0)
+//        {
+//            std::string VRFHashConcatJ = std::string(&VRFOut.VRFHash[0], &VRFOut.VRFHash[64]) + std::to_string(j);
+//            Hash_SHA512(Hash_str, (unsigned char*)(VRFHashConcatJ.c_str()), VRFHashConcatJ.length());
+//            BigInt Hash = byte_array_to_cpp_int(Hash_str, crypto_hash_sha512_BYTES);
+//
+//            if (Hash < LowestHash)
+//                LowestHash = Hash;
+//
+//            j--;
+//        }
+
+
+//        if (j > 0)
+//        {
+//            //divulgar el bloque
+//            AlgorandMessage* msg = new AlgorandMessage(currentRound, 0, std::to_string(BP_SelectedBlock).c_str());
+//            msg->SetCredentials(VRFOut, a.AccountAddress);
+//            Gossip(msg);
+//
+//            EV << j << endl;
+//        }
+
+
+        if (j > 0)
+        {
+            BigInt Hash = byte_array_to_cpp_int(VRFOut.VRFHash, 64);
+            if (Hash < LowestHash) LowestHash = Hash;
+        }
     }
 
-    //TODO in this function:
-    //implement sortition validation
-    //implement block structures
-    //implement 2 kinds of proposal messages (full block, brief version)
-    //implement hash function for blocks
+    AlgorandMessage* msg = new AlgorandMessage(currentRound, 0, std::to_string(BP_SelectedBlock).c_str());
+    //msg->SetCredentials(VRFOut, a.AccountAddress);
+    Gossip(msg);
+    cancelAndDelete(msg);
 
-
-    simpleBlock BP_SelectedBlock = INT_MAX;
-
-
-    //primero sortition
-    //por ahora, siempre propone uno solo
-    auto str = std::to_string(rand() % 100);
-    cMessage* msg = new cMessage(str.c_str());
 
 
     //share message
-    BP_SelectedBlock = ProcessMessage(msg);
+//    BP_SelectedBlock = ProcessMessage(msg);
     auto BP_OGBlockCache = BP_SelectedBlock;
-    Gossip(msg);
-
-    cancelAndDelete(msg);
+//    Gossip(msg);
+//
+//    cancelAndDelete(msg);
 
 
     auto startTime = simTime();
     while (simTime() < startTime + BlockProposalDelayTime)
     {
-        cMessage* newMsg = receive(BlockProposalDelayTime);
+        AlgorandMessage* newMsg = (AlgorandMessage*)(receive(BlockProposalDelayTime));
         if (newMsg)
         {
-            //TODO: check validity
-
-            auto msgData = ProcessMessage(newMsg);
-            if (msgData < BP_SelectedBlock)
-                BP_SelectedBlock = msgData;
-
-            //Gossip(newMsg);
+            //Rudimentary check for validity. TODO: check other properties (eg. credentials)
+            if (newMsg->round == currentRound && newMsg->step == 0)
+            {
+                auto msgData = ProcessMessage(newMsg);
+                if (msgData < BP_SelectedBlock)
+                    BP_SelectedBlock = msgData;
+            }
 
             cancelAndDelete(newMsg);
         }
@@ -230,7 +290,7 @@ simpleBlock ParticipationNode::BlockProposal()
 }
 
 
-void ParticipationNode::Gossip(cMessage* m)
+void ParticipationNode::Gossip(AlgorandMessage* m)
 {
     for (int i = 0; i < gateSize("gate"); i++)
     {
@@ -239,7 +299,7 @@ void ParticipationNode::Gossip(cMessage* m)
 }
 
 
-simpleBlock ParticipationNode::ProcessMessage(cMessage* msg)
+simpleBlock ParticipationNode::ProcessMessage(AlgorandMessage* msg)
 {
     //TODO: process different kinds of messages
     //TODO: return a tuple with all relevant information
@@ -252,14 +312,14 @@ simpleBlock ParticipationNode::ProcessMessage(cMessage* msg)
 }
 
 
-simpleBlock ParticipationNode::CountVotes()
+simpleBlock ParticipationNode::CountVotes(short step)
 {
     std::map<simpleBlock, unsigned int> counts;
     auto startTime = simTime();
 
     while(true)
     {
-        cMessage* m = receive(SoftVoteDelayTime);
+        AlgorandMessage* m = (AlgorandMessage*)(receive(SoftVoteDelayTime));
         //Gossip(m);
 
         if (!m)
@@ -269,80 +329,89 @@ simpleBlock ParticipationNode::CountVotes()
         else
         {
             simpleBlock value = ProcessMessage(m);
+
+            counts[value] += m->votes;
+            //counts[value] += 1;
+
             cancelAndDelete(m);
 
-            counts[value] += 1;
-            if (counts[value] >= SoftVoteThreshold) return value;
+            //if (counts[value] >= CommitteeThreshold(step)) return value;
+            //if (counts[value] >= 1) return value;
+            if (counts[value] >= 10) return value;
         }
     }
 }
 
 
-void ParticipationNode::CommitteeVote(const simpleBlock& hblock)
+void ParticipationNode::CommitteeVote(const simpleBlock& hblock, short step)
 {
-    //TODO: check if user is in committee using sortition
+    for (Account& a : OnlineAccounts)
+    {
+        VRFOutput VRFOut;
+        uint64_t j = Sortition(a, TotalStakedAlgos(), CommitteeSize(1), VRFOut, 1);
 
-    cMessage* m = new cMessage(std::to_string(hblock).c_str());
-    Gossip(m);
-    cancelAndDelete(m);
+        AlgorandMessage* m = new AlgorandMessage(currentRound, step, std::to_string(hblock).c_str());
+        m->SetVotes(j);
+        Gossip(m);
+        cancelAndDelete(m);
+    }
 }
 
 
 simpleBlock ParticipationNode::SoftVote(const simpleBlock& hblock)
 {
-    CommitteeVote(hblock);
-    simpleBlock hblock1 = CountVotes();
+   //If proposal is NULL, do not vote!
+    if (hblock != EMPTY_HASH)
+        CommitteeVote(hblock, 1);
 
-    if (hblock1 == TIMEOUT) CommitteeVote(EMPTY_HASH);
-    else CommitteeVote(hblock1);
+    simpleBlock hblock1 = CountVotes(1);
 
-    hblock1 = CountVotes();
-    if (hblock1 == TIMEOUT) return EMPTY_HASH;
-    else return hblock1;
+     if (hblock1 == TIMEOUT) return EMPTY_HASH;
+     else return hblock1;
 }
 
 
 simpleBlock ParticipationNode::CertifyVote(const simpleBlock& hblock)
 {
-    //TODO: implementar nociones de final y tentative consensus
-    //TODO: implementar common coin solution
+    //TODO: implementar period (next vote, ver que es late, down y redo)
+    //TODO: implementar common coin solution (? reserchear si es algo que siguen usando en primer lugar)
 
     simpleBlock r = hblock;
     int step = 3;
 
     while(step < 255)
     {
-        CommitteeVote(r);
-        r = CountVotes();
+        CommitteeVote(r, step);
+        r = CountVotes(step);
         if (r == TIMEOUT) r = hblock;
         else if (r != EMPTY_HASH)
         {
-            for (int s = step; s < step+3; s++) CommitteeVote(r);
-            //if (step == 1) CommitteeVote(r);
+            for (int s = step; s < step+3; s++) CommitteeVote(r, step);
+            //if (step == 3) CommitteeVote(r);
             return r;
         }
         step++;
 
 
-        CommitteeVote(r);
-        r = CountVotes();
+        CommitteeVote(r, step);
+        r = CountVotes(step);
         if (r == TIMEOUT) r = EMPTY_HASH;
         else if (r == EMPTY_HASH)
         {
-            for (int s = step; s < step+3; s++) CommitteeVote(r);
+            for (int s = step; s < step+3; s++) CommitteeVote(r, step);
             return r;
         }
         step++;
 
 
         //COMMON COIN ACA. POR AHORA VOTO COMUN PARA BENCHMARKING
-        CommitteeVote(r);
-        step++;
+        CommitteeVote(r, step);
+        //step++;   en el paper esta esta linea, pero creo que en la realidad no avanza el step aca
     }
 
 
     //TODO: rutina de recovery
-    //por ahora, retornar el empty_hash
+    //por ahora, retornar el empty_hash. Es posible que esto sea lo que hace en REDO de todas formas
     return EMPTY_HASH;
 }
 

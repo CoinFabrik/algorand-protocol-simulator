@@ -17,19 +17,28 @@
 #define MESSAGEDEFINITIONS_H_
 
 #include <omnetpp/cmessage.h>
-
-
-enum ConsensusType{TENTATIVE, FINAL};
+#include "DataTypeDefinitions.h"
 
 
 class AlgorandMessage: public omnetpp::cMessage {
 public:
     AlgorandMessage(){}
+    AlgorandMessage(uint64_t r, short s, const char* str):step(s),round(r),cMessage(str), votes(0){}
+    AlgorandMessage(AlgorandMessage* msg):round(msg->round), step(msg->step), cMessage(*msg){}
     virtual ~AlgorandMessage(){}
 
-protected:
-    short step;
+    virtual cMessage* dup() const override  {return new AlgorandMessage(*this);}
+
+    inline void SetVotes(uint64_t j){votes=j;}
+    void SetCredentials(VRFOutput& Cred, Address& I);
+
+//protected:
     uint64_t round;
+    short step;
+
+    uint64_t votes;
+    VRFOutput ProposerVRFCredentials;
+    Address ProposerAddress;
 };
 
 
@@ -52,8 +61,8 @@ public:
     VoteMessage();
     virtual ~VoteMessage();
 
-private:
-    ConsensusType Consensus;
+protected:
+    uint64_t votes;
 };
 
 

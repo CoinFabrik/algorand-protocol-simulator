@@ -1,8 +1,13 @@
 #include <vector>
 #include <boost/multiprecision/cpp_int.hpp>
+#include <boost/multiprecision/cpp_int.hpp>
+#include <boost/multiprecision/cpp_bin_float.hpp>
 
 typedef boost::multiprecision::uint256_t uint256_t;
+typedef boost::multiprecision::cpp_int BigInt;
+typedef boost::multiprecision::number<boost::multiprecision::cpp_bin_float<156>> BigFloat; //2**(64*8) has 155 decimal digits
 
+typedef uint256_t Address;
 
 typedef unsigned int simpleBlock;
 
@@ -16,7 +21,7 @@ struct VRFKeyPair
 
 struct Account
 {
-    uint64_t Address;
+    Address AccountAddress;
     uint64_t Money;
 
     VRFKeyPair VRFKeys;
@@ -25,8 +30,8 @@ struct Account
 
 struct VRFOutput
 {
-    unsigned char VRFProof[80];
     unsigned char VRFHash[64];
+    unsigned char VRFProof[80];
 };
 
 
@@ -40,20 +45,37 @@ struct Ledger
 
 
 
+
+
+struct stSeedAndProof
+{
+    std::string Seed;
+    std::string Proof;
+
+    stSeedAndProof()
+    {
+        Seed.resize(32, '0');
+        Proof.resize(32, char(0));
+    }
+};
+
+
 struct LedgerEntry
 {
     //o is some opaque object O
     unsigned char* Obj;
-    unsigned char* Seed; //uint256_t Seed;  //Q
+    stSeedAndProof SeedAndProof;
+    //unsigned char* Seed; //uint256_t Seed;  //Q
+
 
     LedgerEntry()
     {
-        Seed = new unsigned char[32];
+
     }
 
     ~LedgerEntry()
     {
-        delete[] Seed; Seed = nullptr;
+
     }
 
     unsigned char* Encoding()
@@ -71,9 +93,9 @@ struct LedgerEntry
 struct NewLedger
 {
     bool ValidEntry(LedgerEntry e){return true; }
-    unsigned char* SeedLookup(uint64_t round){return Entries[round].Seed;}
+    std::string SeedLookup(uint64_t round){return Entries[round>0? round : 0].SeedAndProof.Seed;}
     //TODO RecordLookup
-    unsigned char* DigestLookup(uint64_t round){return Entries[round].Digest();} //uint256_t DigestLookup(uint64_t round){return Entries[round].Digest();}
+    unsigned char* DigestLookup(uint64_t round){return Entries[round>0? round : 0].Digest();} //uint256_t DigestLookup(uint64_t round){return Entries[round].Digest();}
     //TODO TotalStakeLookup
 
 
@@ -110,3 +132,13 @@ inline unsigned int CommitteeThreshold(uint8_t Step)
     }
 }
 
+
+
+
+//-------------------- Conversion helper functions --------------------//
+static BigInt byte_array_to_cpp_int(unsigned char* n, uint64_t len)
+{
+    BigInt i;
+    import_bits(i, n, n+len);
+    return i;
+}

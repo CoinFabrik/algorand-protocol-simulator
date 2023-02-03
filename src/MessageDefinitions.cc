@@ -14,3 +14,12 @@
 // 
 
 #include "MessageDefinitions.h"
+
+
+Register_Class(AlgorandMessage)
+
+
+void AlgorandMessage::SetCredentials(VRFOutput& Cred, Address& I)
+{
+
+}

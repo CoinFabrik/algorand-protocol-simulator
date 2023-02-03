@@ -1,2 +1,2 @@
 #! /bin/sh
-./runparsim-mpi ./ALGORAND_SIM_TEST_1 -u Cmdenv -c General omnetpp.ini partitioning.ini $*
+./runparsim-mpi ./algorandprotocolsimulator -u Cmdenv -c General omnetpp.ini partitioning.ini $*

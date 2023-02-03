@@ -19,7 +19,7 @@
 //OMNET includes
 #include <omnetpp.h>
 #include <omnetpp/cqueue.h>
-#include "DataTypeDefinitions.h"
+#include "MessageDefinitions.h"
 
 //C/C++ standard includes
 #include <iostream>
@@ -33,14 +33,9 @@
 
 //boost includes
 #include <boost/math/distributions/binomial.hpp>
-#include <boost/multiprecision/cpp_int.hpp>
-#include <boost/multiprecision/cpp_bin_float.hpp>
+
 
 using namespace omnetpp;
-
-typedef boost::multiprecision::cpp_int BigInt;
-//typedef boost::multiprecision::number<boost::multiprecision::cpp_bin_float<64*10+1>> BigFloat;
-typedef boost::multiprecision::number<boost::multiprecision::cpp_bin_float<2048>> BigFloat;   //VER! Es necesaria tanta precisión?
 
 
 const simpleBlock EMPTY_HASH = 0;
@@ -51,7 +46,7 @@ const unsigned int TIMEOUT = UINT_MAX;
 //GLOBAL NETWORK PARAMETERS
 unsigned int BlockProposalDelayTime = 5;
 unsigned int FullBlockDelayTime = 60;
-unsigned int SoftVoteDelayTime = 20;
+unsigned int SoftVoteDelayTime = 200; //20
 unsigned int CertVoteDelayTime = 10;
 
 unsigned int SoftVoteThreshold = 2;
@@ -91,9 +86,12 @@ public:
     void finish();
 
 
+    //node initialization functions
+    void AddGenesisBlock();
+    void InitBalanceTracker();
 
     //broadcasting functions
-    void Gossip(cMessage* m);
+    void Gossip(AlgorandMessage* m);
 
 
     //signature functions
@@ -101,12 +99,12 @@ public:
     uint64_t VerifySignature(unsigned char* SignedData, unsigned char* PK); //outputs the "weight" of signature
 
 
-    //multipurpose cryptographic hash
-    inline void Hash_SHA512(unsigned char* out, unsigned char* in, uint64_t len){crypto_hash_sha512(out, in, len);}
+    //multipurpose cryptographic hash. TODO: implement SHA512/256 (no esta en sodium?)
+    inline void Hash_SHA256(unsigned char* out, unsigned char* in, uint64_t len){crypto_hash_sha256(out, in, len);}
 
 
     //seed computation and verification
-    void DeriveSeed(unsigned char* SeedHash, unsigned char* SeedProof, Account& a, unsigned int period, unsigned int step, unsigned int round);
+    void DeriveSeed(stSeedAndProof& SeedAndProof, Account& a, unsigned int period, unsigned int round);
     bool VerifySeed();
 
 
@@ -114,15 +112,16 @@ public:
     VRFOutput RunVRF(Account& a, unsigned char* bytes, uint64_t bytesLen);
     bool VerifyVRF(Account& a, unsigned char* bytes, uint64_t bytesLen, VRFOutput& HashAndProof);
     uint64_t sortition_binomial_cdf_walk(double n, double p, double ratio, uint64_t money);
-    uint64_t Sortition(Account& a, uint64_t totalMoney, double expectedSize, VRFOutput& cryptoDigest);
-    BigInt byte_array_to_cpp_int(unsigned char* n, uint64_t size);
+    uint64_t Sortition(Account& a, uint64_t totalMoney, double expectedSize, VRFOutput& cryptoDigest, short Step);
     uint64_t VerifySortition();
 
 
     //main algorithm subroutines
-    simpleBlock ProcessMessage(cMessage* msg);
-    void CommitteeVote(const simpleBlock& hblock);
-    simpleBlock CountVotes();
+    uint64_t TotalStakedAlgos();
+    LedgerEntry* MakeBlock();
+    simpleBlock ProcessMessage(AlgorandMessage* msg);
+    void CommitteeVote(const simpleBlock& hblock, short step);
+    simpleBlock CountVotes(short step);
 
     //main algorithm functions
     simpleBlock BlockProposal();
