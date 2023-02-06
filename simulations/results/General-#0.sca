@@ -1,0 +1,28 @@
+version 3
+run General-0-20230205-03:09:25-8384
+attr configname General
+attr datetime 20230205-03:09:25
+attr datetimef 20230205-030925
+attr experiment General
+attr inifile omnetpp.ini
+attr iterationvars ""
+attr iterationvarsd ""
+attr iterationvarsf ""
+attr measurement ""
+attr network AlgorandNetwork
+attr processid 8384
+attr repetition 0
+attr replication #0
+attr resultdir results
+attr runnumber 0
+attr seedset 0
+config network AlgorandNetwork
+
+par AlgorandNetwork.PartNode[0] typename "\"ParticipationNode\""
+par AlgorandNetwork.PartNode[1] typename "\"ParticipationNode\""
+par AlgorandNetwork.PartNode[2] typename "\"ParticipationNode\""
+par AlgorandNetwork.RelayNode[0] typename "\"RelayNode\""
+par AlgorandNetwork typename "\"AlgorandNetwork\""
+par AlgorandNetwork partCount 3
+par AlgorandNetwork relCount 1
+

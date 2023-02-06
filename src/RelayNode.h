@@ -19,6 +19,7 @@
 #include <omnetpp.h>
 #include <omnetpp/csimplemodule.h>
 #include <omnetpp/cmessage.h>
+#include "MessageDefinitions.h"
 
 using namespace omnetpp;
 
@@ -30,6 +31,9 @@ public:
 
     //void handleMessage(cMessage* msg);
     void activity();
+
+//private:
+    std::vector<AlgorandMessage*> ReusableMessages;
 };
 
 #endif /* RELAYNODE_H_ */

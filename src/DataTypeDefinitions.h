@@ -7,9 +7,8 @@ typedef boost::multiprecision::uint256_t uint256_t;
 typedef boost::multiprecision::cpp_int BigInt;
 typedef boost::multiprecision::number<boost::multiprecision::cpp_bin_float<156>> BigFloat; //2**(64*8) has 155 decimal digits
 
-typedef uint256_t Address;
 
-typedef unsigned int simpleBlock;
+typedef uint256_t Address;
 
 
 struct VRFKeyPair
@@ -30,21 +29,15 @@ struct Account
 
 struct VRFOutput
 {
-    unsigned char VRFHash[64];
-    unsigned char VRFProof[80];
+    std::string VRFHash;
+    std::string VRFProof;
+
+    VRFOutput()
+    {
+        VRFHash.resize(64, char(0));
+        VRFProof.resize(80, char(0));
+    }
 };
-
-
-struct Ledger
-{
-    std::vector<unsigned int> blocks;
-};
-
-
-
-
-
-
 
 
 struct stSeedAndProof
@@ -54,7 +47,7 @@ struct stSeedAndProof
 
     stSeedAndProof()
     {
-        Seed.resize(32, '0');
+        Seed.resize(32, char(0));
         Proof.resize(32, char(0));
     }
 };
@@ -63,8 +56,13 @@ struct stSeedAndProof
 struct LedgerEntry
 {
     //o is some opaque object O
-    unsigned char* Obj;
+    //unsigned char* Obj;
+    int PlaceholderID;
+
     stSeedAndProof SeedAndProof;
+
+    VRFOutput ProposerCredentials;
+    Address ProposerAddress;
     //unsigned char* Seed; //uint256_t Seed;  //Q
 
 
@@ -72,6 +70,7 @@ struct LedgerEntry
     {
 
     }
+    LedgerEntry(int v):PlaceholderID(v){}
 
     ~LedgerEntry()
     {
@@ -90,7 +89,7 @@ struct LedgerEntry
 };
 
 
-struct NewLedger
+struct Ledger
 {
     bool ValidEntry(LedgerEntry e){return true; }
     std::string SeedLookup(uint64_t round){return Entries[round>0? round : 0].SeedAndProof.Seed;}
@@ -142,3 +141,6 @@ static BigInt byte_array_to_cpp_int(unsigned char* n, uint64_t len)
     import_bits(i, n, n+len);
     return i;
 }
+
+
+static inline unsigned char* uchar_ptr(std::string& str){return (unsigned char*)(str.data());}

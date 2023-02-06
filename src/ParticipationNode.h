@@ -18,7 +18,7 @@
 
 //OMNET includes
 #include <omnetpp.h>
-#include <omnetpp/cqueue.h>
+//#include <omnetpp/cqueue.h>
 #include "MessageDefinitions.h"
 
 //C/C++ standard includes
@@ -38,12 +38,12 @@
 using namespace omnetpp;
 
 
-const simpleBlock EMPTY_HASH = 0;
-const unsigned int TIMEOUT = UINT_MAX;
+const int EMPTY_HASH = 0;
+const int TIMEOUT = 0;
 
 
 /*************************/
-//GLOBAL NETWORK PARAMETERS
+//GLOBAL NETWORK TEST PARAMETERS
 unsigned int BlockProposalDelayTime = 5;
 unsigned int FullBlockDelayTime = 60;
 unsigned int SoftVoteDelayTime = 200; //20
@@ -112,36 +112,36 @@ public:
     VRFOutput RunVRF(Account& a, unsigned char* bytes, uint64_t bytesLen);
     bool VerifyVRF(Account& a, unsigned char* bytes, uint64_t bytesLen, VRFOutput& HashAndProof);
     uint64_t sortition_binomial_cdf_walk(double n, double p, double ratio, uint64_t money);
-    uint64_t Sortition(Account& a, uint64_t totalMoney, double expectedSize, VRFOutput& cryptoDigest, short Step);
+    uint64_t Sortition(Account& a, uint64_t totalMoney, double expectedSize, VRFOutput& cryptoDigest, short step);
     uint64_t VerifySortition();
 
 
     //main algorithm subroutines
     uint64_t TotalStakedAlgos();
-    LedgerEntry* MakeBlock();
-    simpleBlock ProcessMessage(AlgorandMessage* msg);
-    void CommitteeVote(const simpleBlock& hblock, short step);
-    simpleBlock CountVotes(short step);
+    int ProcessMessage(AlgorandMessage* msg);
+    uint64_t CommitteeVote(LedgerEntry& hblock, short step);
+    LedgerEntry CountVotes(short step, uint64_t localValue, uint64_t localVotes);
 
     //main algorithm functions
-    simpleBlock BlockProposal();
-    simpleBlock SoftVote(const simpleBlock& hblock);
-    simpleBlock CertifyVote(const simpleBlock& hblock);
-    void ConfirmBlock(const simpleBlock& hblock);
+    LedgerEntry BlockAssembly();
+    LedgerEntry BlockProposal(LedgerEntry& LocalBlockVal);
+    LedgerEntry SoftVote(LedgerEntry& hblock);
+    LedgerEntry CertifyVote(LedgerEntry& hblock);
+    void ConfirmBlock(const LedgerEntry& hblock);
 
 
 protected:
     BigFloat two_to_the_hashlen; //constant for sortition
 
 
-    Ledger LocalLedgerCopy;
     uint64_t currentRound;
-
-
     std::vector<Account> OnlineAccounts;
-    //cQueue UnprocessedMessages;
+    Ledger Ledger;
 
-    NewLedger Ledger;
+
+//private:
+public:
+    std::vector<AlgorandMessage*> ReusableMessages;
 };
 
 

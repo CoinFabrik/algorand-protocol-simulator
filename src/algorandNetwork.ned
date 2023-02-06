@@ -48,7 +48,8 @@ network AlgorandNetwork
     connections:
 //        for i=0..partCount-1, for j=0..relCount-1
 //        { 
-//        	RelayNode[j].gate++ <--> {  delay = 50ms; } <--> PartNode[i].gate++;
+//        	//RelayNode[j].gate++ <--> {  delay = 50ms; } <--> PartNode[i].gate++;
+//        	RelayNode[j].gate++ <--> PartNode[i].gate++;
 //        }
         
         for j=0..relCount-1, for i=0..9

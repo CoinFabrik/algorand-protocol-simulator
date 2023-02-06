@@ -21,5 +21,48 @@ Register_Class(AlgorandMessage)
 
 void AlgorandMessage::SetCredentials(VRFOutput& Cred, Address& I)
 {
-
+    ProposerVRFCredentials.VRFHash = Cred.VRFHash;
+    ProposerVRFCredentials.VRFProof = Cred.VRFProof;
 }
+
+
+AlgorandMessage* AlgorandMessage::MakeMessage(std::vector<AlgorandMessage*>& MsgBuffer, uint64_t round, short step, uint64_t votes, VRFOutput& SenderVRFCredentials, Address& SenderAddress, LedgerEntry& Block)
+{
+    AlgorandMessage* NewMsg = nullptr;
+    if (MsgBuffer.size())
+    {
+        NewMsg = MsgBuffer.back();
+        MsgBuffer.pop_back();
+
+        //NewMsg->SetName(std::to_string(Block.PlaceholderID).c_str());
+        NewMsg->round = round;
+        NewMsg->step = step;
+        NewMsg->SetVotes(votes);
+        NewMsg->SetCredentials(SenderVRFCredentials, SenderAddress);
+        NewMsg->SetPayload(Block);
+    }
+    else
+    {
+        NewMsg = new AlgorandMessage(round, step, ""); //std::to_string(Block.PlaceholderID).c_str());
+        NewMsg->SetVotes(votes);
+        NewMsg->SetCredentials(SenderVRFCredentials, SenderAddress);
+        NewMsg->SetPayload(Block);
+    }
+    return NewMsg;
+}
+
+
+void AlgorandMessage::RecycleMessage(cSimpleModule* callerModule, std::vector<AlgorandMessage*>& MsgBuffer, AlgorandMessage* msg)
+{
+    if(MsgBuffer.size() < REUSABLE_MSG_BUFFER_SIZE) MsgBuffer.push_back(msg);
+    else callerModule->cancelAndDelete(msg);
+
+    msg = nullptr;  //either way, prevent message from being used
+}
+
+
+AlgorandMessage* AlgorandMessage::DuplicateMessage(std::vector<AlgorandMessage*>& MsgBuffer, AlgorandMessage* msg)
+{
+    return MakeMessage(MsgBuffer, msg->round, msg->step, msg->votes, msg->ProposerVRFCredentials, msg->ProposerAddress, msg->Payload);
+}
+
