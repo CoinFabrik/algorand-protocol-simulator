@@ -1,0 +1,2 @@
+V1. Version implemented with Activity(). Algorithm implemented based loosely on the SOSP paper, with some changes taken from specs and code. Using the sodium fork for VRFs and Hash functions.
+Uses boost for big numbers.

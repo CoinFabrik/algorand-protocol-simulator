@@ -77,11 +77,23 @@ class ParticipationNode: public cSimpleModule
 {
 
 public:
+//    void HandleMessage(cMessage* m);
+//
+//    uint64_t round;
+//    uint64_t period;
+//    uint8_t step;
+//
+//    uint8_t lastStep;
+//    uint64_t pinnedVote;
+
+
+
+
     ParticipationNode();
     virtual ~ParticipationNode();
 
     void initialize();
-    void activity();
+    //void activity();
 
     void finish();
 

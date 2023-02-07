@@ -438,16 +438,16 @@ void ParticipationNode::activity()
     while(true)
     {
         LedgerEntry localBlockVal = BlockAssembly();
-        EV << "Node " << this->getId() << " finished BA stage\n";
+//        EV << "Node " << this->getId() << " finished BA stage\n";
 
         localBlockVal = BlockProposal(localBlockVal);
-        EV << "Node " << this->getId() << " finished BP stage\n";
+//        EV << "Node " << this->getId() << " finished BP stage\n";
 
         localBlockVal = SoftVote(localBlockVal);
-        EV << "Node " << this->getId() << " finished SV stage\n";
+//        EV << "Node " << this->getId() << " finished SV stage\n";
 
         localBlockVal = CertifyVote(localBlockVal);
-        EV << "Node " << this->getId() << " finished CV stage\n";
+//        EV << "Node " << this->getId() << " finished CV stage\n";
 
         ConfirmBlock(localBlockVal);
         EV_DETAIL << "Block "<< localBlockVal.PlaceholderID <<" confirmed by node " << this->getId() << "\n";
@@ -456,6 +456,17 @@ void ParticipationNode::activity()
         EV_DETAIL << "ROUND " << currentRound-1 << " FINISHED SUCCESFULY BY NODE "<< this->getId() << "AT SIMTIME " << simTime() << "\n";
     }
 }
+
+
+//void ParticipationNode::HandleMessage(cMessage* m)
+//{
+//    AlgorandMessage* msg = (AlgorandMessage*)(m);
+//
+//    if (msg->isSelfMessage())
+//    {
+//
+//    }
+//}
 
 
 void ParticipationNode::finish()
