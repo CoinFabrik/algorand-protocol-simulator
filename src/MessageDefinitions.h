@@ -20,7 +20,7 @@
 #include <omnetpp.h>
 #include "DataTypeDefinitions.h"
 
-#define REUSABLE_MSG_BUFFER_SIZE 1000
+#define REUSABLE_MSG_BUFFER_SIZE 1
 
 using namespace omnetpp;
 
@@ -59,30 +59,8 @@ public:
 
 
     LedgerEntry Payload;
-};
 
-
-class ProposalMessage: public AlgorandMessage {
-public:
-    ProposalMessage();
-    virtual ~ProposalMessage();
-};
-
-
-class FullBlockMessage: public AlgorandMessage {
-public:
-    FullBlockMessage();
-    virtual ~FullBlockMessage();
-};
-
-
-class VoteMessage: public AlgorandMessage {
-public:
-    VoteMessage();
-    virtual ~VoteMessage();
-
-protected:
-    uint64_t votes;
+    Vote vote;
 };
 
 

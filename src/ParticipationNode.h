@@ -39,18 +39,6 @@ using namespace omnetpp;
 
 
 const int EMPTY_HASH = 0;
-const int TIMEOUT = 0;
-
-
-/*************************/
-//GLOBAL NETWORK TEST PARAMETERS
-unsigned int BlockProposalDelayTime = 5;
-unsigned int FullBlockDelayTime = 60;
-unsigned int SoftVoteDelayTime = 200; //20
-unsigned int CertVoteDelayTime = 10;
-
-unsigned int SoftVoteThreshold = 2;
-/*************************/
 
 
 /**********************************************************************************/
@@ -62,29 +50,47 @@ unsigned int BalanceLookback = 2*SeedLookback*SeedRefreshInterval;
 //time parameters (in seconds). TODO: darles nombres mas descriptivos
 float Lambda = 2.f;
 float Lambda0 = 1.7f;
-float LambdaF = 5.f * 60.f; //5 min
+float LambdaF = 300.f; //5 min
 float UppercaseLambda = 17.f;
 
 inline float FilterTimeout(unsigned int p){return 2.f * (p==0? Lambda0 : Lambda);}
 /**********************************************************************************/
 
 
-
-
+typedef uint64_t SimpleBlock;
 
 
 class ParticipationNode: public cSimpleModule
 {
 
 public:
-//    void HandleMessage(cMessage* m);
-//
-//    uint64_t round;
-//    uint64_t period;
-//    uint8_t step;
-//
-//    uint8_t lastStep;
-//    uint64_t pinnedVote;
+    void handleMessage(cMessage* m);
+    cMessage* FastResyncEvent;
+    cMessage* TimeoutEvent;
+
+    uint64_t round;
+    uint64_t period;
+    uint8_t step;
+
+    uint8_t lastConcludingStep;
+
+
+    ProposalValue pinnedValue;
+    ProposalPayload pinnedPayload;
+
+
+    std::vector<LedgerEntry> P;   //observedProposals
+    std::vector<Vote> SoftVotes;  //observedSoftVotes       //ver: sorted by value?
+    std::vector<Vote> CertVotes;  //observedCertVotes
+
+    std::vector<Vote> RecoveryVotes;
+
+
+    //std::map<Address, Vote> P; //ObservedProposals;
+    //std::vector<Address, Vote> V; //ObservedVotes;
+
+
+    SimTime startTime;
 
 
 
@@ -93,10 +99,6 @@ public:
     virtual ~ParticipationNode();
 
     void initialize();
-    //void activity();
-
-    void finish();
-
 
     //node initialization functions
     void AddGenesisBlock();
@@ -112,7 +114,7 @@ public:
 
 
     //multipurpose cryptographic hash. TODO: implement SHA512/256 (no esta en sodium?)
-    inline void Hash_SHA256(unsigned char* out, unsigned char* in, uint64_t len){crypto_hash_sha256(out, in, len);}
+    inline void Hash_SHA256(unsigned char* out, unsigned char* in, uint64_t len){crypto_hash_sha256(out, in, len);}  //TODO: switch for SHA512/256
 
 
     //seed computation and verification
@@ -130,16 +132,24 @@ public:
 
     //main algorithm subroutines
     uint64_t TotalStakedAlgos();
-    int ProcessMessage(AlgorandMessage* msg);
+//    int ProcessMessage(AlgorandMessage* msg);
     uint64_t CommitteeVote(LedgerEntry& hblock, short step);
     LedgerEntry CountVotes(short step, uint64_t localValue, uint64_t localVotes);
 
     //main algorithm functions
     LedgerEntry BlockAssembly();
     LedgerEntry BlockProposal(LedgerEntry& LocalBlockVal);
+
+    void SoftVote_New();
+
     LedgerEntry SoftVote(LedgerEntry& hblock);
     LedgerEntry CertifyVote(LedgerEntry& hblock);
     void ConfirmBlock(const LedgerEntry& hblock);
+
+
+    void ProcessMessage(AlgorandMessage* msg);
+
+    void GarbageCollectState();
 
 
 protected:

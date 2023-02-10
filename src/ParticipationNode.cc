@@ -19,25 +19,40 @@
 Define_Module(ParticipationNode);
 
 
-ParticipationNode::ParticipationNode():cSimpleModule(4096)
+ParticipationNode::ParticipationNode() : round(1), period(0), step(0), lastConcludingStep(0)//, pinnedVote(0)
 {
+//    uint64_t pinnedVote;
+
+
+
+
     currentRound = 0;
 
     //initialize constant for sortition
     two_to_the_hashlen = boost::multiprecision::pow(BigFloat(2.0), 64*8);
 
-    ReusableMessages.reserve(REUSABLE_MSG_BUFFER_SIZE);
+    //ReusableMessages.reserve(REUSABLE_MSG_BUFFER_SIZE);
+    ReusableMessages.resize(REUSABLE_MSG_BUFFER_SIZE);
+    for (int i = 0; i < ReusableMessages.size(); i++) ReusableMessages[i] = new AlgorandMessage();
+
+    FastResyncEvent = new cMessage(nullptr, 253);
+    TimeoutEvent = new cMessage(nullptr, 0);
 }
 
 
 ParticipationNode::~ParticipationNode()
 {
     for (auto& m : ReusableMessages) cancelAndDelete(m);
+    cancelAndDelete(FastResyncEvent);
+    cancelAndDelete(TimeoutEvent);
 }
 
 
 void ParticipationNode::initialize()
 {
+    //Timeout starter self-event
+    scheduleAfter(0, TimeoutEvent);
+
     //initialize sodium library
     if (sodium_init() < 0)
     {
@@ -45,8 +60,14 @@ void ParticipationNode::initialize()
         finish();
     }
 
+    //kickstart ledger
+    AddGenesisBlock();
+
+
+
 
     //init 100 online accounts
+    //for(int i = 0; i < 100; i++)
     for(int i = 0; i < 100; i++)
     {
         Account a;
@@ -55,8 +76,6 @@ void ParticipationNode::initialize()
         OnlineAccounts.push_back(a);
     }
 
-
-    AddGenesisBlock();
     InitBalanceTracker();
 }
 
@@ -121,10 +140,6 @@ bool ParticipationNode::VerifySeed()
 {
      return true;
 }
-
-
-//TODO: llevar una cuenta de los mensajes recibidos y gossipeados en un determinado round
-//solo puedo devolver mensaje UNA VEZ
 
 
 VRFOutput ParticipationNode::RunVRF(Account& a, unsigned char* bytes, uint64_t bytesLen)
@@ -220,17 +235,6 @@ LedgerEntry ParticipationNode::BlockProposal(LedgerEntry& Block)
 //        }
 
 
-//        if (j > 0)
-//        {
-//            //divulgar el bloque
-//            AlgorandMessage* msg = new AlgorandMessage(currentRound, 0, std::to_string(BP_SelectedBlock).c_str());
-//            msg->SetCredentials(VRFOut, a.AccountAddress);
-//            Gossip(msg);
-//
-//            EV << j << endl;
-//        }
-
-
         if (j > 0)
         {
             BigInt Hash = byte_array_to_cpp_int(uchar_ptr(VRFOut.VRFHash), 64);
@@ -249,33 +253,7 @@ LedgerEntry ParticipationNode::BlockProposal(LedgerEntry& Block)
     AlgorandMessage::RecycleMessage(this, ReusableMessages, msg);
 
 
-    auto startTime = simTime();
-    while (simTime() < startTime + BlockProposalDelayTime)
-    {
-        AlgorandMessage* newMsg = (AlgorandMessage*)(receive(BlockProposalDelayTime));
-        if (newMsg)
-        {
-            //Rudimentary check for validity. TODO: check other properties (eg. credentials)
-            if (newMsg->round == currentRound && newMsg->step == 0)
-            {
-                auto msgData = newMsg->Payload.PlaceholderID;
-                if (msgData < SelectedBlock.PlaceholderID)
-                    SelectedBlock = newMsg->Payload;
-            }
-
-            AlgorandMessage::RecycleMessage(this, ReusableMessages, newMsg);
-        }
-
-
-    }
-
-    //solo para benchmark por ahora, agrego el recibimiento del bloque completo
-//    if (BP_OGBlockCache == BP_SelectedBlock) Gossip(new cMessage(str.c_str()));
-//    while (simTime() < FullBlockDelayTime)
-//    {
-//        receive(FullBlockDelayTime);
-//        break;
-//    }
+    //TODO: gossip full block
 
 
     return SelectedBlock;
@@ -284,141 +262,75 @@ LedgerEntry ParticipationNode::BlockProposal(LedgerEntry& Block)
 
 void ParticipationNode::Gossip(AlgorandMessage* m)
 {
-    for (int i = 0; i < gateSize("gate"); i++)
+    for (int i = 0; i < 1600; i++)
     {
-        send(AlgorandMessage::DuplicateMessage(ReusableMessages, m), "gate$o", i);
-    }
-}
-
-
-int ParticipationNode::ProcessMessage(AlgorandMessage* msg)
-{
-    //TODO: process different kinds of messages
-    //TODO: return a tuple with all relevant information
-
-    return msg->Payload.PlaceholderID;
-}
-
-
-LedgerEntry ParticipationNode::CountVotes(short step, uint64_t localValue, uint64_t localVotes)
-{
-    std::map<int, unsigned int> counts;
-    auto startTime = simTime();
-
-    counts[localValue] += localVotes;
-
-    while(true)
-    {
-        AlgorandMessage* m = (AlgorandMessage*)(receive(SoftVoteDelayTime));
-        //Gossip(m);
-
-        if (!m)
-        {
-            if(simTime() > startTime + SoftVoteDelayTime) return LedgerEntry(0); //TIMEOUT;
-        }
-        else
-        {
-            int value = m->Payload.PlaceholderID;
-            auto le = m->Payload;
-
-            //validacion rudimentaria. Aca validaria el voto entero?
-            if (m->round == currentRound && m->step == step)
-                counts[value] += m->votes;
-
-            AlgorandMessage::RecycleMessage(this, ReusableMessages, m);
-
-            if (counts[value] >= CommitteeThreshold(step)) return le;
-            //if (counts[value] >= 10) return le;
-        }
-    }
-}
-
-
-uint64_t ParticipationNode::CommitteeVote(LedgerEntry& hblock, short step)
-{
-    uint64_t localVotes = 0;
-    for (Account& a : OnlineAccounts)
-    {
-        VRFOutput VRFOut;
-        uint64_t j = Sortition(a, TotalStakedAlgos(), CommitteeSize(step), VRFOut, step);
-        //uint64_t j = Sortition(a, TotalStakedAlgos(), CommitteeSize(0), VRFOut, step);
-
-        localVotes+= j;
-
-        if (j > 0)
-        {
-            AlgorandMessage* m = AlgorandMessage::MakeMessage(ReusableMessages, currentRound, step, j, VRFOut, a.AccountAddress, hblock);
-            Gossip(m);
-            AlgorandMessage::RecycleMessage(this, ReusableMessages, m);
-        }
-    }
-    return localVotes;
-}
-
-
-LedgerEntry ParticipationNode::SoftVote(LedgerEntry& hblock)
-{
-    uint64_t localVotes = 0;
-
-   //If proposal is NULL, do not vote!
-    if (hblock.PlaceholderID != EMPTY_HASH)
-        localVotes = CommitteeVote(hblock, 1);
-
-    LedgerEntry hblock1 = CountVotes(1, hblock.PlaceholderID, localVotes);
-
-     if (hblock1.PlaceholderID == TIMEOUT) return hblock1;
-     else return hblock1;
-}
-
-
-LedgerEntry ParticipationNode::CertifyVote(LedgerEntry& hblock)
-{
-    //TODO: implementar period (next vote, ver que es late, down y redo)
-    //TODO: implementar common coin solution (? reserchear si es algo que siguen usando en primer lugar)
-
-    LedgerEntry r = hblock;
-    int step = 3;
-
-    while(step < 255)
-    {
-        uint64_t localVotes = CommitteeVote(r, step);
-        r = CountVotes(step, r.PlaceholderID, localVotes);
-        if (r.PlaceholderID == TIMEOUT) r = hblock;
-        else if (r.PlaceholderID != EMPTY_HASH)
-        {
-            for (int s = step; s < step+3; s++) CommitteeVote(r, step);
-            return r;
-            //TODO: incorporate logic for nextvote
-        }
-        step++;
-
-
-        localVotes = CommitteeVote(r, step);
-        r = CountVotes(step, r.PlaceholderID, localVotes);
-        if (r.PlaceholderID == TIMEOUT) r = LedgerEntry(0);
-        else if (r.PlaceholderID == EMPTY_HASH)
-        {
-            for (int s = step; s < step+3; s++) CommitteeVote(r, step);
-            return r;
-        }
-        step++;
-
-
-        //COMMON COIN ACA?
-        //CommitteeVote(r, step);
-        //step++;   en el paper esta esta linea, pero creo que en la realidad no avanza el step aca
+        std::string nodePath = "AlgorandNetwork.PartNode[" + std::to_string(i) + "]";
+        ParticipationNode* bro = (ParticipationNode*)(getModuleByPath(nodePath.c_str()));
+        bro->P.push_back(m->Payload);
     }
 
-
-    //TODO: rutina de recovery
-    //por ahora, retornar el empty_hash. Es posible que esto sea lo que hace en REDO de todas formas
-
-
-    //down vote (step 255) must vote for empty block
-    r = LedgerEntry(0);
-    CommitteeVote(r, step);
-    return r;
+//    int baseId = gateBaseId("gate$o"), size = gateSize("gate$o");
+//    for (int i = 0; i < size; i++)
+//    {
+//        send(AlgorandMessage::DuplicateMessage(ReusableMessages, m), gate(baseId + i));
+//    }
 }
+
+
+//LedgerEntry ParticipationNode::CountVotes(short step, uint64_t localValue, uint64_t localVotes)
+//{
+//    std::map<int, unsigned int> counts;
+//    auto startTime = simTime();
+//
+//    counts[localValue] += localVotes;
+//
+//    while(true)
+//    {
+//        AlgorandMessage* m = (AlgorandMessage*)(receive(SoftVoteDelayTime));
+//        //Gossip(m);
+//
+//        if (!m)
+//        {
+//            if(simTime() > startTime + SoftVoteDelayTime) return LedgerEntry(0); //TIMEOUT;
+//        }
+//        else
+//        {
+//            int value = m->Payload.PlaceholderID;
+//            auto le = m->Payload;
+//
+//            //validacion rudimentaria. Aca validaria el voto entero?
+//            if (m->round == currentRound && m->step == step)
+//                counts[value] += m->votes;
+//
+//            AlgorandMessage::RecycleMessage(this, ReusableMessages, m);
+//
+//            if (counts[value] >= CommitteeThreshold(step)) return le;
+//            //if (counts[value] >= 10) return le;
+//        }
+//    }
+//}
+
+
+//uint64_t ParticipationNode::CommitteeVote(LedgerEntry& hblock, short step)
+//{
+//    uint64_t localVotes = 0;
+//    for (Account& a : OnlineAccounts)
+//    {
+//        VRFOutput VRFOut;
+//        uint64_t j = Sortition(a, TotalStakedAlgos(), CommitteeSize(step), VRFOut, step);
+//        //uint64_t j = Sortition(a, TotalStakedAlgos(), CommitteeSize(0), VRFOut, step);
+//
+//        localVotes+= j;
+//
+//        if (j > 0)
+//        {
+//            AlgorandMessage* m = AlgorandMessage::MakeMessage(ReusableMessages, currentRound, step, j, VRFOut, a.AccountAddress, hblock);
+//            Gossip(m);
+//            AlgorandMessage::RecycleMessage(this, ReusableMessages, m);
+//        }
+//    }
+//    return localVotes;
+//}
 
 
 void ParticipationNode::ConfirmBlock(const LedgerEntry& hblock)
@@ -430,46 +342,146 @@ void ParticipationNode::ConfirmBlock(const LedgerEntry& hblock)
 }
 
 
-void ParticipationNode::activity()
+void ParticipationNode::SoftVote_New()
 {
-    //por ahora, para generar variabilidad de mensajes
-    srand(this->getId());
+    //podria ir comparando a medida que llegan e irme quedando con la mas chica para optimizar (seria compliant con los specs? revisar)
 
-    while(true)
+    for (auto& p : P)
     {
-        LedgerEntry localBlockVal = BlockAssembly();
-//        EV << "Node " << this->getId() << " finished BA stage\n";
-
-        localBlockVal = BlockProposal(localBlockVal);
-//        EV << "Node " << this->getId() << " finished BP stage\n";
-
-        localBlockVal = SoftVote(localBlockVal);
-//        EV << "Node " << this->getId() << " finished SV stage\n";
-
-        localBlockVal = CertifyVote(localBlockVal);
-//        EV << "Node " << this->getId() << " finished CV stage\n";
-
-        ConfirmBlock(localBlockVal);
-        EV_DETAIL << "Block "<< localBlockVal.PlaceholderID <<" confirmed by node " << this->getId() << "\n";
-
-        currentRound++;
-        EV_DETAIL << "ROUND " << currentRound-1 << " FINISHED SUCCESFULY BY NODE "<< this->getId() << "AT SIMTIME " << simTime() << "\n";
+        if (p.cachedCredentialSVHash < pinnedPayload.e.cachedCredentialSVHash)
+            pinnedPayload.e = p;
     }
 }
 
 
-//void ParticipationNode::HandleMessage(cMessage* m)
-//{
-//    AlgorandMessage* msg = (AlgorandMessage*)(m);
-//
-//    if (msg->isSelfMessage())
-//    {
-//
-//    }
-//}
-
-
-void ParticipationNode::finish()
+void ParticipationNode::handleMessage(cMessage* msg)
 {
+    if (msg->isSelfMessage()) //timeout event
+    {
+        if (msg->getKind() == 0)
+        {
+            EV << "LLEGUE ACA" << endl;
 
+            startTime = simTime();
+            step = 0;
+
+            //schedule a soft vote
+            TimeoutEvent->setKind(1);
+            scheduleAfter(FilterTimeout(period), TimeoutEvent);
+            scheduleAfter(LambdaF + 0, FastResyncEvent);
+
+
+
+
+            auto LocalBlock = BlockAssembly();
+            LocalBlock = BlockProposal(LocalBlock);
+
+            //pin value? check on specs
+            pinnedPayload.e = LocalBlock;
+
+
+
+
+            step = 1;
+            lastConcludingStep = 0;
+            return;  //aca ya propuse, y me quedo esperando el soft
+        }
+        else if (msg->getKind() == 1 || msg->getKind() == 2)  //2 no deberia ser nunca, pero lo incluyo por completitud
+        {
+            step = 1;
+
+            TimeoutEvent->setKind(3);
+            scheduleAt(startTime + fmax(4.f * Lambda, UppercaseLambda), TimeoutEvent);
+
+            SoftVote_New();
+            EV << "SOFT" << endl;
+
+            step = 2;
+            lastConcludingStep = 1;
+
+            //certification vote happens from now on, but is driven by messages (not timeout)
+            //node has to observe a cert bundle BEFORE the next timeout
+
+            return;
+
+        }
+        else if (msg->getKind() < 253)  // >= 3 por definicion
+        {
+            lastConcludingStep = step;
+            step = msg->getKind();
+
+            TimeoutEvent->setKind(step + 1);
+            scheduleAt(startTime + fmax(4.f * Lambda, UppercaseLambda) + pow(2.f, step) * Lambda + 0, TimeoutEvent);
+
+            //nextVote()
+
+
+
+
+            //por ahora (volver al loop):
+            GarbageCollectState();
+            TimeoutEvent->setKind(0);
+            scheduleAfter(0, TimeoutEvent);
+
+
+
+
+            return;
+        }
+        else //if (msg->getKind() >= 253)
+        {
+            lastConcludingStep = step;
+            step = msg->getKind();
+
+            scheduleAfter(LambdaF + 0, FastResyncEvent);
+
+            //late, redo, down
+
+            return;
+        }
+    }
+    else //vote or proposal message
+    {
+        AlgorandMessage* m = (AlgorandMessage*)(msg);
+
+        //TODO: validaciones varias (todas las causas para ignorar mensaje)
+        if (round > m->round)
+            AlgorandMessage::RecycleMessage(this, ReusableMessages, m);
+
+
+        //observar el mensaje
+        if (m->step == 0)
+        {
+            P.push_back(m->Payload);
+        }
+        else if (m->step == 1)
+        {
+            SoftVotes.push_back(m->vote);
+        }
+        else if (m->step == 2)
+        {
+            CertVotes.push_back(m->vote);
+        }
+
+        //observar el mensaje
+        //si se observa un nuevo round
+        //if (newRoundObs)
+        //{
+            //RescheduleAfter(Lambda, msg);
+        //}
+    }
+}
+
+
+void ParticipationNode::GarbageCollectState()
+{
+    P.clear();
+    SoftVotes.clear();
+    CertVotes.clear();
+    RecoveryVotes.clear();
+
+    cancelEvent(TimeoutEvent);
+    cancelEvent(FastResyncEvent);
+
+    period = 0;
 }

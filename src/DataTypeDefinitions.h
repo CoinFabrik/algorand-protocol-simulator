@@ -66,6 +66,9 @@ struct LedgerEntry
     //unsigned char* Seed; //uint256_t Seed;  //Q
 
 
+    uint256_t cachedCredentialSVHash;
+
+
     LedgerEntry()
     {
 
@@ -99,6 +102,38 @@ struct Ledger
 
 
     std::vector<LedgerEntry> Entries;
+};
+
+
+struct ProposalPayload
+{
+    LedgerEntry e;
+    uint256_t y;   //signature
+};
+
+
+struct ProposalValue
+{
+    Address I_orig;
+    uint64_t p_orig;
+
+    uint64_t d;   //digest(e), o sea Hash(e)
+    uint256_t h;  //Hash(encoding(e))
+};
+
+
+struct Vote
+{
+    Address I;
+
+    uint64_t r;
+    uint64_t p;
+    uint8_t s;
+
+    ProposalValue v;
+    uint64_t j;
+
+    unsigned char* signature;
 };
 
 

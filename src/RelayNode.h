@@ -29,8 +29,8 @@ public:
     virtual ~RelayNode();
     void initialize();
 
-    //void handleMessage(cMessage* msg);
-    void activity();
+    void handleMessage(cMessage* msg);
+    //void activity();
 
 //private:
     std::vector<AlgorandMessage*> ReusableMessages;

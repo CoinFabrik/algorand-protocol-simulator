@@ -19,7 +19,7 @@
 Define_Module(RelayNode);
 
 
-RelayNode::RelayNode():cSimpleModule(4096)
+RelayNode::RelayNode()
 {
     // TODO Auto-generated constructor stub
 
@@ -37,21 +37,18 @@ void RelayNode::initialize()
 }
 
 
-void RelayNode::activity()
+void RelayNode::handleMessage(cMessage* m)
 {
-    while(true)
+    AlgorandMessage* msg = (AlgorandMessage*)(m);
+    int baseId = gateBaseId("gate$o"), size = gateSize("gate$o");
+    int senderIdx = msg->getArrivalGate()->getIndex();
+
+    for (int i = 0; i < size; i++)
     {
-        AlgorandMessage* msg = (AlgorandMessage*)(receive());
-        if (msg)
+        if (senderIdx != i)
         {
-            for (int i = 0; i < gateSize("gate"); i++)
-            {
-                if (msg->getArrivalGate()->getIndex() != i)
-                {
-                    send(AlgorandMessage::DuplicateMessage(ReusableMessages, msg), "gate$o", i);
-                }
-            }
-            AlgorandMessage::RecycleMessage(this, ReusableMessages, msg);
+            send(AlgorandMessage::DuplicateMessage(ReusableMessages, msg), gate(baseId + i));
         }
     }
+    AlgorandMessage::RecycleMessage(this, ReusableMessages, msg);
 }

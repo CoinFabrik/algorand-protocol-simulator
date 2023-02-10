@@ -35,8 +35,8 @@ network AlgorandNetwork
 	int partCount = 1600;
 	int relCount = 160;
 
-//	int partCount = 14;
-//	int relCount = 2;
+//	int partCount = 300;
+//	int relCount = 30;
 	
 //	int partCount = 3;
 //	int relCount = 1;
@@ -48,18 +48,19 @@ network AlgorandNetwork
     connections:
 //        for i=0..partCount-1, for j=0..relCount-1
 //        { 
-//        	//RelayNode[j].gate++ <--> {  delay = 50ms; } <--> PartNode[i].gate++;
-//        	RelayNode[j].gate++ <--> PartNode[i].gate++;
+//        	RelayNode[j].gate++ <--> {  delay = 100ms; } <--> PartNode[i].gate++;
+//        	//RelayNode[j].gate++ <--> PartNode[i].gate++;
 //        }
+
         
         for j=0..relCount-1, for i=0..9
         {
-        	RelayNode[j].gate++ <--> {  delay = 50ms; } <--> PartNode[j*10 + i].gate++;
+        	RelayNode[j].gate++ <--> {  delay = 100ms; } <--> PartNode[j*10 + i].gate++;
         }
         
         for j=0..relCount-1
         {
-            RelayNode[j].gate++ <--> {  delay = 50ms; } <--> RelayNode[(j+1) % (relCount-1)].gate++;
+            RelayNode[j].gate++ <--> {  delay = 100ms; } <--> RelayNode[(j+1) % (relCount-1)].gate++;
         }
 }
 

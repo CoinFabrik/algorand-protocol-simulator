@@ -40,6 +40,15 @@ AlgorandMessage* AlgorandMessage::MakeMessage(std::vector<AlgorandMessage*>& Msg
         NewMsg->SetVotes(votes);
         NewMsg->SetCredentials(SenderVRFCredentials, SenderAddress);
         NewMsg->SetPayload(Block);
+
+
+//        NewMsg->vote.I = SenderAddress;
+//        //NewMsg->vote.cachedCredentialSVHash = SenderVRFCredentials;
+//        NewMsg->vote.j = votes;
+//        NewMsg->vote.r = round;
+//        //NewMsg->vote.p = period;
+//        NewMsg->vote.s = step;
+//        NewMsg->vote.v = Block.PlaceholderID;
     }
     else
     {
@@ -47,6 +56,15 @@ AlgorandMessage* AlgorandMessage::MakeMessage(std::vector<AlgorandMessage*>& Msg
         NewMsg->SetVotes(votes);
         NewMsg->SetCredentials(SenderVRFCredentials, SenderAddress);
         NewMsg->SetPayload(Block);
+
+
+//        NewMsg->vote.I = SenderAddress;
+//        //NewMsg->vote.cachedCredentialSVHash = SenderVRFCredentials;
+//        NewMsg->vote.j = votes;
+//        NewMsg->vote.r = round;
+//        //NewMsg->vote.p = period;
+//        NewMsg->vote.s = step;
+//        NewMsg->vote.v = Block.PlaceholderID;
     }
     return NewMsg;
 }

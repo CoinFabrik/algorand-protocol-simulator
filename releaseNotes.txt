@@ -1,2 +1,3 @@
-V1. Version implemented with Activity(). Algorithm implemented based loosely on the SOSP paper, with some changes taken from specs and code. Using the sodium fork for VRFs and Hash functions.
-Uses boost for big numbers.
+V1. Version implemented with Activity(). Algorithm implemented based loosely on the SOSP paper, with some changes taken from specs and code. Using the sodium fork for VRFs and Hash functions. Uses boost for big numbers.
+
+V2. Version implemented with HandleMessage(). Only proposal and soft vote stages implemented. Relays and message sending abstracted out; communication between nodes is done by directly by access through a pointer. Profiling with VerySleepy shows bottleneck to now be VRF calculation (which is to be expected).
