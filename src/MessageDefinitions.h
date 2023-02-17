@@ -20,7 +20,7 @@
 #include <omnetpp.h>
 #include "DataTypeDefinitions.h"
 
-#define REUSABLE_MSG_BUFFER_SIZE 1
+#define REUSABLE_MSG_BUFFER_SIZE 0
 
 using namespace omnetpp;
 

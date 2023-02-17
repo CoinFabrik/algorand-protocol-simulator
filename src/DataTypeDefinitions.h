@@ -75,10 +75,6 @@ struct LedgerEntry
     }
     LedgerEntry(int v):PlaceholderID(v){}
 
-    ~LedgerEntry()
-    {
-
-    }
 
     unsigned char* Encoding()
     {
@@ -133,7 +129,7 @@ struct Vote
     ProposalValue v;
     uint64_t j;
 
-    unsigned char* signature;
+    //unsigned char* signature;
 };
 
 

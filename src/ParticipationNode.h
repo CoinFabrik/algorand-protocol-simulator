@@ -16,6 +16,8 @@
 #ifndef PARTICIPATIONNODE_H_
 #define PARTICIPATIONNODE_H_
 
+#define SIMULATE_VRF 1
+
 //OMNET includes
 #include <omnetpp.h>
 //#include <omnetpp/cqueue.h>
@@ -26,6 +28,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <algorithm>
+#include <random>
 
 //sodium library includes
 #include <sodium.h>
@@ -33,7 +36,7 @@
 
 //boost includes
 #include <boost/math/distributions/binomial.hpp>
-
+#include <boost/random.hpp>
 
 using namespace omnetpp;
 
@@ -63,6 +66,11 @@ typedef uint64_t SimpleBlock;
 class ParticipationNode: public cSimpleModule
 {
 
+#if SIMULATE_VRF
+    boost::random::independent_bits_engine<boost::random::mt19937, 256, uint256_t> generator;
+#endif
+
+
 public:
     void handleMessage(cMessage* m);
     cMessage* FastResyncEvent;
@@ -86,11 +94,21 @@ public:
     std::vector<Vote> RecoveryVotes;
 
 
-    //std::map<Address, Vote> P; //ObservedProposals;
-    //std::vector<Address, Vote> V; //ObservedVotes;
+
+    //maps proposed block's hash value to votes
+    std::map<uint64_t, std::vector<Vote*>> ValueToVoteMap;
+    //std::map<Address, Proposal*>;
 
 
     SimTime startTime;
+
+
+    void StartNewRound();
+    void StartNewPeriod();
+
+
+    void OnProposalReceived();
+    void OnVoteReceived();
 
 
 
@@ -133,17 +151,14 @@ public:
     //main algorithm subroutines
     uint64_t TotalStakedAlgos();
 //    int ProcessMessage(AlgorandMessage* msg);
-    uint64_t CommitteeVote(LedgerEntry& hblock, short step);
-    LedgerEntry CountVotes(short step, uint64_t localValue, uint64_t localVotes);
 
     //main algorithm functions
     LedgerEntry BlockAssembly();
     LedgerEntry BlockProposal(LedgerEntry& LocalBlockVal);
 
-    void SoftVote_New();
+    void SoftVote();
+    void NextVote();
 
-    LedgerEntry SoftVote(LedgerEntry& hblock);
-    LedgerEntry CertifyVote(LedgerEntry& hblock);
     void ConfirmBlock(const LedgerEntry& hblock);
 
 
@@ -156,7 +171,6 @@ protected:
     BigFloat two_to_the_hashlen; //constant for sortition
 
 
-    uint64_t currentRound;
     std::vector<Account> OnlineAccounts;
     Ledger Ledger;
 
@@ -164,6 +178,13 @@ protected:
 //private:
 public:
     std::vector<AlgorandMessage*> ReusableMessages;
+
+
+
+
+#if SIMULATE_VRF
+    VRFOutput SimulateVRF();
+#endif
 };
 
 

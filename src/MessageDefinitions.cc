@@ -21,8 +21,8 @@ Register_Class(AlgorandMessage)
 
 void AlgorandMessage::SetCredentials(VRFOutput& Cred, Address& I)
 {
-    ProposerVRFCredentials.VRFHash = Cred.VRFHash;
-    ProposerVRFCredentials.VRFProof = Cred.VRFProof;
+    //ProposerVRFCredentials.VRFHash = Cred.VRFHash;
+    //ProposerVRFCredentials.VRFProof = Cred.VRFProof;
 }
 
 

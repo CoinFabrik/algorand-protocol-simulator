@@ -26,8 +26,6 @@ ParticipationNode::ParticipationNode() : round(1), period(0), step(0), lastConcl
 
 
 
-    currentRound = 0;
-
     //initialize constant for sortition
     two_to_the_hashlen = boost::multiprecision::pow(BigFloat(2.0), 64*8);
 
@@ -83,9 +81,9 @@ void ParticipationNode::initialize()
 void ParticipationNode::AddGenesisBlock()
 {
     LedgerEntry e;
-    e.SeedAndProof.Seed = "hgyurteydhsjaskeudiaoapdlfkruiu9";
+    //e.SeedAndProof.Seed = "hgyurteydhsjaskeudiaoapdlfkruiu9";
     Ledger.Entries.push_back(e);
-    currentRound = 1;
+    round = 1;
 }
 
 
@@ -95,6 +93,25 @@ void ParticipationNode::InitBalanceTracker()
 }
 
 
+#if SIMULATE_VRF
+
+VRFOutput ParticipationNode::SimulateVRF()
+{
+    VRFOutput Out;
+    uint256_t randomHash = generator();
+
+    export_bits(randomHash, uchar_ptr(Out.VRFHash), 256);
+
+    //get a proof that is just going to be either 0 or 1
+    //we are abstracting away the VRF computation, to validate
+    //other parts of the protocol
+    Out.VRFProof = std::to_string(0).c_str();
+    Out.VRFProof[79] = (unsigned char)(1);
+
+    return Out;
+}
+
+#endif
 
 
 void ParticipationNode::DeriveSeed(stSeedAndProof& SeedAndProof, Account& a, unsigned int period, unsigned int round)
@@ -181,13 +198,20 @@ uint64_t ParticipationNode::Sortition(Account& a, uint64_t totalMoney, double ex
     std::string role = std::to_string(Step);
     std::string m = seed + role;
 
+#if SIMULATE_VRF
+    cryptoDigest = SimulateVRF();
+#else
     cryptoDigest = RunVRF(a, (unsigned char*)(m.c_str()), m.length());
+#endif
 
 
     double binomialN = double(a.Money);
     double binomialP = expectedSize / double(totalMoney);
 
     BigInt t = byte_array_to_cpp_int(uchar_ptr(cryptoDigest.VRFHash), 64);
+
+    EV << t << endl;
+
     double ratio = (BigFloat(t) / two_to_the_hashlen).convert_to<double>();
 
     return sortition_binomial_cdf_walk(binomialN, binomialP, ratio, a.Money);
@@ -248,7 +272,7 @@ LedgerEntry ParticipationNode::BlockProposal(LedgerEntry& Block)
     }
 
 
-    AlgorandMessage* msg = AlgorandMessage::MakeMessage(ReusableMessages, currentRound, 0, 0, SelectedBlock.ProposerCredentials, ChosenAccount->AccountAddress, SelectedBlock);
+    AlgorandMessage* msg = AlgorandMessage::MakeMessage(ReusableMessages, round, 0, 0, SelectedBlock.ProposerCredentials, ChosenAccount->AccountAddress, SelectedBlock);
     Gossip(msg);
     AlgorandMessage::RecycleMessage(this, ReusableMessages, msg);
 
@@ -262,12 +286,13 @@ LedgerEntry ParticipationNode::BlockProposal(LedgerEntry& Block)
 
 void ParticipationNode::Gossip(AlgorandMessage* m)
 {
-    for (int i = 0; i < 1600; i++)
+    for (int i = 0; i < 1600; i++)  //1600
     {
         std::string nodePath = "AlgorandNetwork.PartNode[" + std::to_string(i) + "]";
         ParticipationNode* bro = (ParticipationNode*)(getModuleByPath(nodePath.c_str()));
         bro->P.push_back(m->Payload);
     }
+
 
 //    int baseId = gateBaseId("gate$o"), size = gateSize("gate$o");
 //    for (int i = 0; i < size; i++)
@@ -275,62 +300,6 @@ void ParticipationNode::Gossip(AlgorandMessage* m)
 //        send(AlgorandMessage::DuplicateMessage(ReusableMessages, m), gate(baseId + i));
 //    }
 }
-
-
-//LedgerEntry ParticipationNode::CountVotes(short step, uint64_t localValue, uint64_t localVotes)
-//{
-//    std::map<int, unsigned int> counts;
-//    auto startTime = simTime();
-//
-//    counts[localValue] += localVotes;
-//
-//    while(true)
-//    {
-//        AlgorandMessage* m = (AlgorandMessage*)(receive(SoftVoteDelayTime));
-//        //Gossip(m);
-//
-//        if (!m)
-//        {
-//            if(simTime() > startTime + SoftVoteDelayTime) return LedgerEntry(0); //TIMEOUT;
-//        }
-//        else
-//        {
-//            int value = m->Payload.PlaceholderID;
-//            auto le = m->Payload;
-//
-//            //validacion rudimentaria. Aca validaria el voto entero?
-//            if (m->round == currentRound && m->step == step)
-//                counts[value] += m->votes;
-//
-//            AlgorandMessage::RecycleMessage(this, ReusableMessages, m);
-//
-//            if (counts[value] >= CommitteeThreshold(step)) return le;
-//            //if (counts[value] >= 10) return le;
-//        }
-//    }
-//}
-
-
-//uint64_t ParticipationNode::CommitteeVote(LedgerEntry& hblock, short step)
-//{
-//    uint64_t localVotes = 0;
-//    for (Account& a : OnlineAccounts)
-//    {
-//        VRFOutput VRFOut;
-//        uint64_t j = Sortition(a, TotalStakedAlgos(), CommitteeSize(step), VRFOut, step);
-//        //uint64_t j = Sortition(a, TotalStakedAlgos(), CommitteeSize(0), VRFOut, step);
-//
-//        localVotes+= j;
-//
-//        if (j > 0)
-//        {
-//            AlgorandMessage* m = AlgorandMessage::MakeMessage(ReusableMessages, currentRound, step, j, VRFOut, a.AccountAddress, hblock);
-//            Gossip(m);
-//            AlgorandMessage::RecycleMessage(this, ReusableMessages, m);
-//        }
-//    }
-//    return localVotes;
-//}
 
 
 void ParticipationNode::ConfirmBlock(const LedgerEntry& hblock)
@@ -342,7 +311,7 @@ void ParticipationNode::ConfirmBlock(const LedgerEntry& hblock)
 }
 
 
-void ParticipationNode::SoftVote_New()
+void ParticipationNode::SoftVote()
 {
     //podria ir comparando a medida que llegan e irme quedando con la mas chica para optimizar (seria compliant con los specs? revisar)
 
@@ -368,6 +337,7 @@ void ParticipationNode::handleMessage(cMessage* msg)
             //schedule a soft vote
             TimeoutEvent->setKind(1);
             scheduleAfter(FilterTimeout(period), TimeoutEvent);
+            //schedule a fast resynchronization attempt
             scheduleAfter(LambdaF + 0, FastResyncEvent);
 
 
@@ -382,7 +352,7 @@ void ParticipationNode::handleMessage(cMessage* msg)
 
 
 
-            step = 1;
+            //step = 1;
             lastConcludingStep = 0;
             return;  //aca ya propuse, y me quedo esperando el soft
         }
@@ -393,7 +363,7 @@ void ParticipationNode::handleMessage(cMessage* msg)
             TimeoutEvent->setKind(3);
             scheduleAt(startTime + fmax(4.f * Lambda, UppercaseLambda), TimeoutEvent);
 
-            SoftVote_New();
+            SoftVote();
             EV << "SOFT" << endl;
 
             step = 2;
@@ -413,7 +383,9 @@ void ParticipationNode::handleMessage(cMessage* msg)
             TimeoutEvent->setKind(step + 1);
             scheduleAt(startTime + fmax(4.f * Lambda, UppercaseLambda) + pow(2.f, step) * Lambda + 0, TimeoutEvent);
 
+
             //nextVote()
+
 
 
 
@@ -440,36 +412,36 @@ void ParticipationNode::handleMessage(cMessage* msg)
             return;
         }
     }
-    else //vote or proposal message
-    {
-        AlgorandMessage* m = (AlgorandMessage*)(msg);
-
-        //TODO: validaciones varias (todas las causas para ignorar mensaje)
-        if (round > m->round)
-            AlgorandMessage::RecycleMessage(this, ReusableMessages, m);
-
-
-        //observar el mensaje
-        if (m->step == 0)
-        {
-            P.push_back(m->Payload);
-        }
-        else if (m->step == 1)
-        {
-            SoftVotes.push_back(m->vote);
-        }
-        else if (m->step == 2)
-        {
-            CertVotes.push_back(m->vote);
-        }
-
-        //observar el mensaje
-        //si se observa un nuevo round
-        //if (newRoundObs)
-        //{
-            //RescheduleAfter(Lambda, msg);
-        //}
-    }
+//    else //vote or proposal message
+//    {
+//        AlgorandMessage* m = (AlgorandMessage*)(msg);
+//
+//        //TODO: validaciones varias (todas las causas para ignorar mensaje)
+//        if (round > m->round)
+//            AlgorandMessage::RecycleMessage(this, ReusableMessages, m);
+//
+//
+//        //observar el mensaje
+//        if (m->step == 0)
+//        {
+//            P.push_back(m->Payload);
+//        }
+//        else if (m->step == 1)
+//        {
+//            SoftVotes.push_back(m->vote);
+//        }
+//        else if (m->step == 2)
+//        {
+//            CertVotes.push_back(m->vote);
+//        }
+//
+//        //observar el mensaje
+//        //si se observa un nuevo round
+//        //if (newRoundObs)
+//        //{
+//            //RescheduleAfter(Lambda, msg);
+//        //}
+//    }
 }
 
 
@@ -484,4 +456,39 @@ void ParticipationNode::GarbageCollectState()
     cancelEvent(FastResyncEvent);
 
     period = 0;
+}
+
+
+void ParticipationNode::OnProposalReceived()
+{
+
+}
+
+
+void ParticipationNode::OnVoteReceived()
+{
+    //validate  vote
+
+
+
+}
+
+
+void ParticipationNode::StartNewRound()
+{
+    lastConcludingStep = step;
+    //pinnedValue = EMPTY;
+    period = 0;
+    step = 0;
+    round++;
+}
+
+
+void ParticipationNode::StartNewPeriod()
+{
+    lastConcludingStep = step;
+    step = 0;
+
+    //PinnedValue = EMPTY;
+    period++;
 }
