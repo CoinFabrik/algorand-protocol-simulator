@@ -2,6 +2,8 @@
 #include <boost/multiprecision/cpp_int.hpp>
 #include <boost/multiprecision/cpp_int.hpp>
 #include <boost/multiprecision/cpp_bin_float.hpp>
+#include <cstring>
+#include <string>
 
 typedef boost::multiprecision::uint256_t uint256_t;
 typedef boost::multiprecision::cpp_int BigInt;
@@ -20,7 +22,8 @@ struct VRFKeyPair
 
 struct Account
 {
-    Address AccountAddress;
+    Account(Address addr, uint64_t m):I(addr), Money(m){}
+    Address I;
     uint64_t Money;
 
     VRFKeyPair VRFKeys;
@@ -29,13 +32,26 @@ struct Account
 
 struct VRFOutput
 {
-    std::string VRFHash;
-    std::string VRFProof;
+    unsigned char VRFHash[64] = {0};
+    unsigned char VRFProof[80] = {0};
+    //std::string VRFHash;
+    //std::string VRFProof;
 
     VRFOutput()
     {
-        VRFHash.resize(64, char(0));
-        VRFProof.resize(80, char(0));
+    }
+
+
+    bool operator==(const VRFOutput& a) const
+    {
+        return memcmp(VRFHash, a.VRFHash, 64) == 0 && memcmp(VRFProof, a.VRFProof, 80) == 0;
+//        return (VRFHash == a.VRFHash && VRFProof == a.VRFProof);
+    }
+
+    bool operator!=(const VRFOutput& a) const
+    {
+        return memcmp(VRFHash, a.VRFHash, 64) != 0 || memcmp(VRFProof, a.VRFProof, 80) != 0;
+//        return (VRFHash != a.VRFHash || VRFProof != a.VRFProof);
     }
 };
 
@@ -98,6 +114,9 @@ struct Ledger
 
 
     std::vector<LedgerEntry> Entries;
+
+    //chanteada
+    std::vector<uint256_t> SimEntries;
 };
 
 
@@ -105,6 +124,13 @@ struct ProposalPayload
 {
     LedgerEntry e;
     uint256_t y;   //signature
+
+
+    bool operator() (const ProposalPayload& lhs, const ProposalPayload& rhs) const
+    {
+        return lhs.e.PlaceholderID < rhs.e.PlaceholderID;
+    }
+
 };
 
 
@@ -113,23 +139,83 @@ struct ProposalValue
     Address I_orig;
     uint64_t p_orig;
 
-    uint64_t d;   //digest(e), o sea Hash(e)
-    uint256_t h;  //Hash(encoding(e))
+    //uint64_t d;   //digest(e), o sea Hash(e)
+    uint256_t d;
+
+    struct unused
+    {
+        uint256_t h;  //Hash(encoding(e))
+    };
+
+    
+    struct performanceCachedStuff
+    {
+        VRFOutput Credentials;
+        uint64_t weight;
+
+        uint256_t lowestComputedHash;
+    }Cached;
+
+
+    ProposalValue()
+    {
+        I_orig = 0; p_orig = 0; d = 0; Cached.weight = 0; Cached.lowestComputedHash = 0;
+
+    }
+
+
+    bool operator==(const ProposalValue& a) const
+    {
+        return (I_orig == a.I_orig && p_orig == a.p_orig && d == a.d && Cached.Credentials == a.Cached.Credentials && Cached.lowestComputedHash == a.Cached.lowestComputedHash);
+    }
+
+    bool operator!=(const ProposalValue& a) const
+    {
+        return (I_orig != a.I_orig || p_orig != a.p_orig || d != a.d || Cached.Credentials != a.Cached.Credentials || Cached.lowestComputedHash != a.Cached.lowestComputedHash);
+    }
 };
 
 
 struct Vote
 {
+    //raw vote
     Address I;
-
     uint64_t r;
     uint64_t p;
     uint8_t s;
-
     ProposalValue v;
-    uint64_t j;
+
+    //Verified credentials:
+    VRFOutput VRFOut;
+    uint64_t weight;
 
     //unsigned char* signature;
+
+
+    bool operator() (const Vote& lhs, const Vote& rhs) const
+    {
+        return lhs.s < rhs.s;
+    }
+
+    Vote(){}
+    Vote(Address addr, uint64_t round, uint64_t period, uint8_t step, ProposalValue propVal, VRFOutput cred, uint64_t j):
+        I(addr), r(round), p(period), s(step), v(propVal), VRFOut(cred), weight(j){}
+};
+
+
+struct EquivocationVote
+{
+    Vote voteA;
+    Vote voteB;
+};
+
+
+struct Bundle
+{
+    uint64_t weight;
+    std::vector<Vote> votes;
+
+    Bundle():weight(0){}
 };
 
 

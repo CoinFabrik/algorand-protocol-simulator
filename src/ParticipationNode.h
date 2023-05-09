@@ -18,10 +18,15 @@
 
 #define SIMULATE_VRF 1
 
+#define TOTAL_NODES 2000
+#define START_MONEY 10000
+#define TOTAL_ACCOUNTS 1
+
 //OMNET includes
 #include <omnetpp.h>
 //#include <omnetpp/cqueue.h>
-#include "MessageDefinitions.h"
+//#include "MessageDefinitions.h"
+#include "DataTypeDefinitions.h"
 
 //C/C++ standard includes
 #include <iostream>
@@ -29,6 +34,8 @@
 #include <stdlib.h>
 #include <algorithm>
 #include <random>
+#include <unordered_map>
+#include <map>
 
 //sodium library includes
 #include <sodium.h>
@@ -39,9 +46,6 @@
 #include <boost/random.hpp>
 
 using namespace omnetpp;
-
-
-const int EMPTY_HASH = 0;
 
 
 /**********************************************************************************/
@@ -57,135 +61,171 @@ float LambdaF = 300.f; //5 min
 float UppercaseLambda = 17.f;
 
 inline float FilterTimeout(unsigned int p){return 2.f * (p==0? Lambda0 : Lambda);}
+
+//useful constants
+ProposalValue EMPTY_PROPOSAL_VALUE;
 /**********************************************************************************/
-
-
-typedef uint64_t SimpleBlock;
 
 
 class ParticipationNode: public cSimpleModule
 {
-
-#if SIMULATE_VRF
-    boost::random::independent_bits_engine<boost::random::mt19937, 256, uint256_t> generator;
-#endif
-
-
 public:
+    //random 256 bit number generator
+    boost::random::independent_bits_engine<boost::random::mt19937, 256, uint256_t> generator;
+
+    ParticipationNode();
+    ~ParticipationNode();
+    void initialize();
+
+    //message handling (used as a "main" for timeouts)
     void handleMessage(cMessage* m);
     cMessage* FastResyncEvent;
     cMessage* TimeoutEvent;
-
-    uint64_t round;
-    uint64_t period;
-    uint8_t step;
-
-    uint8_t lastConcludingStep;
-
-
-    ProposalValue pinnedValue;
-    ProposalPayload pinnedPayload;
-
-
-    std::vector<LedgerEntry> P;   //observedProposals
-    std::vector<Vote> SoftVotes;  //observedSoftVotes       //ver: sorted by value?
-    std::vector<Vote> CertVotes;  //observedCertVotes
-
-    std::vector<Vote> RecoveryVotes;
-
-
-
-    //maps proposed block's hash value to votes
-    std::map<uint64_t, std::vector<Vote*>> ValueToVoteMap;
-    //std::map<Address, Proposal*>;
-
-
     SimTime startTime;
 
 
+    //FSM variables
+    uint64_t round;
+    uint64_t period;
+
+    uint8_t step;
+    uint8_t lastConcludingStep;
+
+    ProposalValue pinnedValue;
+    // ProposalPayload pinnedPayload;
+
+
+    uint64_t TotalStakedAlgos();
+    void InitOnlineAccounts();
+    std::vector<Account> onlineAccounts;
+    Ledger Ledger;
+
+
+
+
+    //proposal and vote sets
+    std::vector<ProposalPayload> P;
+    std::vector<Vote> V;
+
+    //boradcasting functions
+    void Broadcast(Vote& v);
+    void Broadcast(ProposalPayload& p);
+
+    //helper functions for special values
+    ProposalValue Sigma();
+    ProposalValue Mu();
+
+
+    //helper functions for round control
     void StartNewRound();
-    void StartNewPeriod();
+    void StartNewPeriod(uint64_t FinishedPeriod);
+    void GarbageCollectStateForNewRound();
+    void GarbageCollectStateForNewPeriod();
 
 
-    void OnProposalReceived();
-    void OnVoteReceived();
+    //round step functions
+    void BlockAssembly();
+    void BlockProposal();
+
+    void SoftVote();
+    uint256_t ComputeLowestCredValue(VRFOutput& Credential, uint64_t weight);
+
+    void ConfirmBlock(uint256_t fakeEntry);
+
+    void NextVote();
+    void FastRecovery();
+
+    bool IsCommitable(ProposalValue& v);
+
+
+    std::vector<Vote> ProposalVotes;
+
+    //bundle helper functions and data structures
+    //a hash table, the entry tuple is a pair of (block digest)
+    std::unordered_map<uint256_t, Bundle[255]> ActiveBundles[2];
+    std::unordered_map<uint256_t, Bundle[255]> FinishedBundles[2];
+    Bundle* FreshestBundle;
+    Bundle* SigmaBundle;
+    ProposalValue MuValue;
+
+    std::vector<Vote> FastRecoveryVotes[3];
+
+    //std::vector<EquivocationVote> ReceivedEqVotes;
+    //std::unordered_map<uint256_t, Vote>AddressToVoteMap;  //for repeated votes and equivocation votes
+
+
+    //message reception handlers
+    void HandleVote(Vote& ReceivedVote);
+    void HandleProposalPayload(ProposalPayload& ReceivedPP);
+    void HandleBundle(Bundle& ReceivedBundle);
 
 
 
+    void ResynchronizationAttempt();
 
-    ParticipationNode();
-    virtual ~ParticipationNode();
-
-    void initialize();
-
-    //node initialization functions
-    void AddGenesisBlock();
-    void InitBalanceTracker();
-
-    //broadcasting functions
-    void Gossip(AlgorandMessage* m);
-
-
-    //signature functions
-    void Sign(Account& a, unsigned char* data, unsigned char* outSignedData);
-    uint64_t VerifySignature(unsigned char* SignedData, unsigned char* PK); //outputs the "weight" of signature
-
-
-    //multipurpose cryptographic hash. TODO: implement SHA512/256 (no esta en sodium?)
-    inline void Hash_SHA256(unsigned char* out, unsigned char* in, uint64_t len){crypto_hash_sha256(out, in, len);}  //TODO: switch for SHA512/256
-
-
-    //seed computation and verification
-    void DeriveSeed(stSeedAndProof& SeedAndProof, Account& a, unsigned int period, unsigned int round);
-    bool VerifySeed();
 
 
     //sortition functions
+    VRFOutput SimulateVRF();
     VRFOutput RunVRF(Account& a, unsigned char* bytes, uint64_t bytesLen);
     bool VerifyVRF(Account& a, unsigned char* bytes, uint64_t bytesLen, VRFOutput& HashAndProof);
     uint64_t sortition_binomial_cdf_walk(double n, double p, double ratio, uint64_t money);
     uint64_t Sortition(Account& a, uint64_t totalMoney, double expectedSize, VRFOutput& cryptoDigest, short step);
     uint64_t VerifySortition();
 
-
-    //main algorithm subroutines
-    uint64_t TotalStakedAlgos();
-//    int ProcessMessage(AlgorandMessage* msg);
-
-    //main algorithm functions
-    LedgerEntry BlockAssembly();
-    LedgerEntry BlockProposal(LedgerEntry& LocalBlockVal);
-
-    void SoftVote();
-    void NextVote();
-
-    void ConfirmBlock(const LedgerEntry& hblock);
-
-
-    void ProcessMessage(AlgorandMessage* msg);
-
-    void GarbageCollectState();
-
-
-protected:
     BigFloat two_to_the_hashlen; //constant for sortition
-
-
-    std::vector<Account> OnlineAccounts;
-    Ledger Ledger;
-
-
-//private:
-public:
-    std::vector<AlgorandMessage*> ReusableMessages;
-
-
-
-
-#if SIMULATE_VRF
-    VRFOutput SimulateVRF();
-#endif
 };
+
+
+
+
+
+
+// class ParticipationNode: public cSimpleModule
+// {
+
+//     std::vector<LedgerEntry> P;   //observedProposals
+
+//     std::vector<Vote> SoftVotes;  //observedSoftVotes       //ver: sorted by value?
+//     std::vector<Vote> CertVotes;  //observedCertVotes
+//     std::vector<Vote> RecoveryVotes;
+
+//     std::vector<Vote> PeriodObservedVotes[256];
+
+
+//     std::set<struct Proposal> ObservedProposals;
+
+
+//     //node initialization functions
+//     void AddGenesisBlock();
+//     void InitBalanceTracker();
+
+
+//     //signature functions
+//     void Sign(Account& a, unsigned char* data, unsigned char* outSignedData);
+//     uint64_t VerifySignature(unsigned char* SignedData, unsigned char* PK); //outputs the "weight" of signature
+
+
+//     //multipurpose cryptographic hash. TODO: implement SHA512/256 (no esta en sodium?)
+//     inline void Hash_SHA256(unsigned char* out, unsigned char* in, uint64_t len){crypto_hash_sha256(out, in, len);}  //TODO: switch for SHA512/256
+
+
+//     //seed computation and verification
+//     void DeriveSeed(stSeedAndProof& SeedAndProof, Account& a, unsigned int period, unsigned int round);
+//     bool VerifySeed();
+
+
+//     //main algorithm subroutines
+//     uint64_t TotalStakedAlgos();
+
+//     void ConfirmBlock(const LedgerEntry& hblock);
+
+
+// protected:
+
+
+//     std::vector<Account> OnlineAccounts;
+//     Ledger Ledger;
 
 
 #endif /* PARTICIPATIONNODE_H_ */
