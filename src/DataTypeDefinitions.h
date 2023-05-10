@@ -219,6 +219,13 @@ struct Bundle
 };
 
 
+struct BalanceTracker
+{
+    uint64_t TotalStakedMoney;
+    std::vector<uint64_t> CachedBalance;
+};
+
+
 inline unsigned int CommitteeSize(uint8_t Step)
 {
     switch(Step)

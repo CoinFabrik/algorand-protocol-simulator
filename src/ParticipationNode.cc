@@ -164,14 +164,14 @@ void ParticipationNode::HandleVote(Vote& ReceivedVote)
     //validate vote
     //TODO
 
-//    //vote ignore clauses. Falta equivocations!
+    //vote ignore clauses. Falta equivocations! TODO: implement equivocations
     if (ReceivedVote.r < round) return;
     if (ReceivedVote.r == round+1 && (ReceivedVote.p > 0 || (ReceivedVote.s > 3 && ReceivedVote.s < 253))) return;
-//    if (ReceivedVote.r == round && (
-//            (ReceivedVote.p < period-1 || ReceivedVote.p > period+1) ||
-//            (ReceivedVote.p == period+1 && (ReceivedVote.s > 3 && ReceivedVote.s < 253)) ||
-//            (ReceivedVote.p == period && (ReceivedVote.s > 3 && ReceivedVote.s < 253) && (ReceivedVote.s < step-1 || ReceivedVote.s < step+1)) ||
-//            (ReceivedVote.p == period-1 && (ReceivedVote.s > 3 && ReceivedVote.s < 253) && (ReceivedVote.s < lastConcludingStep-1 || ReceivedVote.s < lastConcludingStep+1)))) return;
+    if (ReceivedVote.r == round && (
+            (ReceivedVote.p < period==0?0:period-1 || ReceivedVote.p > period+1) ||
+            (ReceivedVote.p == period+1 && (ReceivedVote.s > 3 && ReceivedVote.s < 253)) ||
+            (ReceivedVote.p == period && (ReceivedVote.s > 3 && ReceivedVote.s < 253) && (ReceivedVote.s < step==0?0:step-1 || ReceivedVote.s > step+1)) ||
+            (ReceivedVote.p == period-1 && (ReceivedVote.s > 3 && ReceivedVote.s < 253) && (ReceivedVote.s < lastConcludingStep==0?0:lastConcludingStep-1 || ReceivedVote.s > lastConcludingStep+1)) )) return;
 
     //observe vote
 
@@ -343,6 +343,7 @@ ProposalValue ParticipationNode::Mu()
 uint256_t ParticipationNode::ComputeLowestCredValue(VRFOutput& Credential, uint64_t weight)
 {
     //faking it, but its min(H(VRFCredential || 0...j-1))
+    int randomIndex = rand() % weight;
 
     uint256_t lowestObservedVal = uint256_t(-1);
     //generator.seed(0);
@@ -363,7 +364,7 @@ void ParticipationNode::BlockProposal()
   //ProposalPayload chosenProposalPayload;
 
   ProposalValue chosenProposal;
-  uint256_t blockHash = rand()+1;
+  uint256_t blockHash = rand();
   uint256_t lowestCredHashValue = uint256_t(-1);
 
   for (Account& a : onlineAccounts)
@@ -387,8 +388,6 @@ void ParticipationNode::BlockProposal()
           }
       }
   }
-
-  EV << "PROPOSAL CHOSEN "<< chosenProposal.d << endl;
 
   if (chosenProposal != EMPTY_PROPOSAL_VALUE)
   {
@@ -682,9 +681,9 @@ void ParticipationNode::ResynchronizationAttempt()
 
  uint64_t ParticipationNode::Sortition(Account& a, uint64_t totalMoney, double expectedSize, VRFOutput& cryptoDigest, short Step)
  {
-     std::string seed = "00000000000000000000============";
-     std::string role = std::to_string(Step);
-     std::string m = seed + role;
+    //  std::string seed = "00000000000000000000============";
+    //  std::string role = std::to_string(Step);
+    //  std::string m = seed + role;
 
  #if SIMULATE_VRF
      cryptoDigest = SimulateVRF();

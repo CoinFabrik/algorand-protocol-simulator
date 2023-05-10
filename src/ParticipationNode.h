@@ -18,9 +18,9 @@
 
 #define SIMULATE_VRF 1
 
-#define TOTAL_NODES 2000
-#define START_MONEY 10000
-#define TOTAL_ACCOUNTS 1
+#define TOTAL_NODES 200
+#define START_MONEY 100000
+#define TOTAL_ACCOUNTS 10
 
 //OMNET includes
 #include <omnetpp.h>
@@ -105,7 +105,7 @@ public:
 
     //proposal and vote sets
     std::vector<ProposalPayload> P;
-    std::vector<Vote> V;
+    //std::vector<Vote> V;
 
     //boradcasting functions
     void Broadcast(Vote& v);
