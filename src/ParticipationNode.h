@@ -17,10 +17,15 @@
 #define PARTICIPATIONNODE_H_
 
 #define SIMULATE_VRF 1
+#define GLOBAL_BALANCE_TRACKER 1
+#define SIMPLIFIED_BLOCKS 1
+#define KEEP_GLOBAL_LEDGER 1
 
-#define TOTAL_NODES 200
+
+#define TOTAL_NODES 500
 #define START_MONEY 100000
 #define TOTAL_ACCOUNTS 10
+
 
 //OMNET includes
 #include <omnetpp.h>
@@ -54,7 +59,7 @@ unsigned int SeedLookback = 2;
 unsigned int SeedRefreshInterval = 80;
 unsigned int BalanceLookback = 2*SeedLookback*SeedRefreshInterval;
 
-//time parameters (in seconds). TODO: darles nombres mas descriptivos
+//time parameters (in seconds)
 float Lambda = 2.f;
 float Lambda0 = 1.7f;
 float LambdaF = 300.f; //5 min
@@ -64,18 +69,36 @@ inline float FilterTimeout(unsigned int p){return 2.f * (p==0? Lambda0 : Lambda)
 
 //useful constants
 ProposalValue EMPTY_PROPOSAL_VALUE;
+Address FEE_SINK = 0;
 /**********************************************************************************/
+
+
+#if GLOBAL_BALANCE_TRACKER
+std::unordered_map<Address, BalanceRecord> BalanceMap;
+#endif
+
 
 
 class ParticipationNode: public cSimpleModule
 {
 public:
+
     //random 256 bit number generator
     boost::random::independent_bits_engine<boost::random::mt19937, 256, uint256_t> generator;
+    boost::random::independent_bits_engine<boost::random::mt19937, 256, uint256_t> BlockHashGenerator;
 
     ParticipationNode();
     ~ParticipationNode();
     void initialize();
+
+
+    //balance tracking stuff
+    void UpdateBalances();
+
+#if GLOBAL_BALANCE_TRACKER
+    std::unordered_map<Address, BalanceRecord> BalanceMapLocalDivergence;
+#endif
+
 
     //message handling (used as a "main" for timeouts)
     void handleMessage(cMessage* m);
@@ -92,7 +115,6 @@ public:
     uint8_t lastConcludingStep;
 
     ProposalValue pinnedValue;
-    // ProposalPayload pinnedPayload;
 
 
     uint64_t TotalStakedAlgos();
@@ -103,13 +125,13 @@ public:
 
 
 
-    //proposal and vote sets
+    //observed proposals set
     std::vector<ProposalPayload> P;
-    //std::vector<Vote> V;
 
     //boradcasting functions
     void Broadcast(Vote& v);
     void Broadcast(ProposalPayload& p);
+    void Broadcast(Bundle& b);
 
     //helper functions for special values
     ProposalValue Sigma();
@@ -120,12 +142,13 @@ public:
     void StartNewRound();
     void StartNewPeriod(uint64_t FinishedPeriod);
     void GarbageCollectStateForNewRound();
-    void GarbageCollectStateForNewPeriod();
+    void GarbageCollectStateForNewPeriod(uint64_t NewPeriod);
 
 
     //round step functions
-    void BlockAssembly();
-    void BlockProposal();
+    LedgerEntry BlockAssembly();
+    void BlockProposal(LedgerEntry& e);
+    uint256_t ComputeBlockHash(LedgerEntry& e);
 
     void SoftVote();
     uint256_t ComputeLowestCredValue(VRFOutput& Credential, uint64_t weight);
@@ -138,30 +161,54 @@ public:
     bool IsCommitable(ProposalValue& v);
 
 
+    //cached received proposal votes
     std::vector<Vote> ProposalVotes;
+    std::unordered_map<uint256_t, LedgerEntry> CachedFullProposals[3];
 
     //bundle helper functions and data structures
-    //a hash table, the entry tuple is a pair of (block digest)
-    std::unordered_map<uint256_t, Bundle[255]> ActiveBundles[2];
-    std::unordered_map<uint256_t, Bundle[255]> FinishedBundles[2];
+    //a hash table, the entry tuple is a block's hash value
+    std::unordered_map<uint256_t, Bundle[256]> ActiveBundles[3];
+    std::unordered_map<uint256_t, Bundle[256]> FinishedBundles[3];
     Bundle* FreshestBundle;
-    Bundle* SigmaBundle;
+    Bundle* SigmaBundle;  //bundle of the sigma value
     ProposalValue MuValue;
 
+    //cache of received fast recovery votes for easy resynchronization attempts
     std::vector<Vote> FastRecoveryVotes[3];
 
-    //std::vector<EquivocationVote> ReceivedEqVotes;
-    //std::unordered_map<uint256_t, Vote>AddressToVoteMap;  //for repeated votes and equivocation votes
 
+    inline uint8_t GetPrevPeriodSlot(){return CurrentPeriodSlot == 0 ? 2 : CurrentPeriodSlot-1; }
+    inline uint8_t GetNextPeriodSlot(){return (CurrentPeriodSlot+1) % 3; }
+    uint8_t CurrentPeriodSlot = 0;
+    //address to vote map, per step. A maximum of two votes are permitted (one equivocation)
+    //at most I keep 3 periods at all times (one forward, one curent, one backward)
+    std::map<Address, Vote[2]> AddressToVoteMap[256][3];
+//    //Equivocation vote handling stuff
+//    struct EquivocationData
+//    {
+//        Bundle* CachedClosestBundle[255];  //cached closest bundle per step (current round and period)
+//        //std::vector<EquivocationVote> ReceivedEqVotes[255];
+//        //uint64_t combinedEqWeight;
+//
+//        void Clear()
+//        {
+//            for (int i = 0; i < 255; i++)
+//            {
+//                //CombinedEquivocationWeight[i] = 0;
+//                CachedClosestBundle[i] = nullptr;
+//            }
+//        }
+//    }EqData;
+//    uint64_t CombinedEquivocationWeight[2][255];
 
     //message reception handlers
     void HandleVote(Vote& ReceivedVote);
-    void HandleProposalPayload(ProposalPayload& ReceivedPP);
+    void HandleProposal(ProposalPayload& ReceivedPP);
     void HandleBundle(Bundle& ReceivedBundle);
 
 
-
     void ResynchronizationAttempt();
+
 
 
 
@@ -174,6 +221,30 @@ public:
     uint64_t VerifySortition();
 
     BigFloat two_to_the_hashlen; //constant for sortition
+
+
+
+
+    //transaction pool stuff
+    std::vector<Transaction> TransactionPool;
+    void SimulateTransactions();
+    Transaction GenerateRandomTransaction();
+    void Broadcast(Transaction& txn);
+    void ReceiveTransaction(Transaction& txn);
+
+
+
+
+    //verification stuff
+    bool VerifyProposalPayload(LedgerEntry& e);
+    bool VerifyVote(Vote& vt);
+    bool VerifyBundle(Bundle& b);
+
+
+
+    //TESTING
+    //direct network connections (relays I see)
+    std::vector<int> RelayConnections;
 };
 
 

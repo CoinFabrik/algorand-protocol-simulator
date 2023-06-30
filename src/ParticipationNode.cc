@@ -13,6 +13,7 @@
 // along with this program.  If not, see http://www.gnu.org/licenses/.
 // 
 
+#include "GlobalSimulationManager.h"
 #include "ParticipationNode.h"
 
 
@@ -53,7 +54,72 @@ void ParticipationNode::initialize()
 void ParticipationNode::InitOnlineAccounts()
 {
     for (int i = 0; i < uint64_t(TOTAL_ACCOUNTS); i++)
-        onlineAccounts.push_back(Account(rand(), uint64_t(START_MONEY)));
+    {
+        auto NewAccount = Account(rand(), uint64_t(START_MONEY));
+        onlineAccounts.push_back(NewAccount);
+
+        //initialize global balance tracker
+        BalanceMap[NewAccount.I] =  BalanceRecord(NewAccount.Money, true);
+
+        GlobalSimulationManager::SimManager->BalanceMap[NewAccount.I] =  BalanceRecord(NewAccount.Money, true);
+    }
+}
+
+
+void ParticipationNode::UpdateBalances()
+{
+#if GLOBAL_BALANCE_TRACKER
+    //if tracking balance globally, we only let one node (that we are certain is honest, and should not be tampered with) update the global balance
+    //in the future maybe handle this with a global manager class, with access to all nodes that could get the "real" ledger by majority
+    if (this->getIndex() != 0)
+        return;
+#endif
+
+    if (!Ledger.Entries.size()) return;
+
+    uint64_t LookbackParam = 0;
+    //get transactions from last addition to the ledger
+    auto& LastBlock = *(Ledger.Entries.end()-1);
+    auto& LookbackBlock = *(Ledger.Entries.end()-(Ledger.Entries.size()>=LookbackParam?LookbackParam:0));
+
+    //update all balances according to last block
+    for (Transaction& txn : LastBlock.Txns)
+    {
+        //por ahora solo pay
+        BalanceMap[txn.Sender].RawBalance -= txn.Fee + txn.Amount;
+        BalanceMap[txn.Receiver].RawBalance += txn.Amount;
+//        Balance[FEE_SINK_ADDRESS].RawBalance += txn.Fee;
+    }
+
+    //updatear all cached balances according to lookback block
+    for (Transaction& txn : LookbackBlock.Txns)
+    {
+        //por ahora solo pay
+        BalanceMap[txn.Sender].OldBalance -= txn.Fee + txn.Amount;
+        BalanceMap[txn.Receiver].OldBalance += txn.Amount;
+    }
+}
+
+
+void ParticipationNode::SimulateTransactions()
+{
+    //for now, generate 10 random txns
+    for (int i = 0; i < 10; i++)
+    {
+        Transaction txn = GenerateRandomTransaction();
+        Broadcast(txn);
+    }
+}
+
+
+Transaction ParticipationNode::GenerateRandomTransaction()
+{
+    Transaction txn;
+    //pick random txnID, increase global counter
+    //pick random sender
+    //pick random receiver
+    //pick random amount (amount <= sender balance)
+    return txn;
 }
 
 
@@ -65,6 +131,15 @@ void ParticipationNode::handleMessage(cMessage* msg)
     {
         if (msg->getKind() == 0)
         {
+            //TESTING--
+            //txn sim stuff. Testing
+            SimulateTransactions();
+
+            //block assembly stuff. Testing
+            auto e = BlockAssembly();
+            //TESTING--
+
+
             startTime = simTime();
             step = 0;
 
@@ -74,15 +149,10 @@ void ParticipationNode::handleMessage(cMessage* msg)
             //schedule a fast recovery attempt
             scheduleAfter(LambdaF + 0, FastResyncEvent);
 
-
-
-            // auto LocalBlock = BlockAssembly();
-            // LocalBlock = BlockProposal(LocalBlock);
-            BlockProposal();
+            BlockProposal(e);
 
             // //pin value? check on specs
             // pinnedPayload.e = LocalBlock;
-
 
             lastConcludingStep = 0;
             step = 1;
@@ -132,6 +202,13 @@ void ParticipationNode::handleMessage(cMessage* msg)
 }
 
 
+void ParticipationNode::Broadcast(Bundle& b)
+{
+    for (Vote& vt : b.votes)
+            Broadcast(vt);
+}
+
+
 void ParticipationNode::Broadcast(ProposalPayload& pp)
 {
     //broadcast a given proposal
@@ -139,7 +216,7 @@ void ParticipationNode::Broadcast(ProposalPayload& pp)
     {
         std::string nodePath = "AlgorandNetwork.PartNode[" + std::to_string(i) + "]";
         ParticipationNode* bro = (ParticipationNode*)(getModuleByPath(nodePath.c_str()));
-        bro->HandleProposalPayload(pp);
+        bro->HandleProposal(pp);
     }
 }
 
@@ -156,24 +233,74 @@ void ParticipationNode::Broadcast(Vote& v)
 }
 
 
+void ParticipationNode::Broadcast(Transaction& txn)
+{
+    GlobalSimulationManager::SimManager->Network.PropagateMessageThroughNetwork(RelayConnections, getIndex(), (void*)(&txn), TXN);
+
+    //broadcast a given proposal
+    for (int i = 0; i < TOTAL_NODES; i++)
+    {
+        std::string nodePath = "AlgorandNetwork.PartNode[" + std::to_string(i) + "]";
+        ParticipationNode* bro = (ParticipationNode*)(getModuleByPath(nodePath.c_str()));
+        bro->ReceiveTransaction(txn);
+    }
+}
+
+
 void ParticipationNode::HandleVote(Vote& ReceivedVote)
 {
     //macro for methods called directly from foreign nodes (direct memory write optimization)
     Enter_Method_Silent("HandleVote");
 
-    //validate vote
-    //TODO
+    //Ignore invalid vote
+    if (!VerifyVote(ReceivedVote))
+        return;  //here we could also take actions to disconnect from a potentially malicious peer
 
-    //vote ignore clauses. Falta equivocations! TODO: implement equivocations
+    bool IsEquivocation = false;
+    if (AddressToVoteMap[ReceivedVote.s][CurrentPeriodSlot].count(ReceivedVote.I))
+    {
+        //check if repeated vote (already observed)
+        //LAS SPECS dicen que si s=0 lo ignoro. Si s=/=0 no lo ignoro?? que hago entonces con repeated votes?
+        if (AddressToVoteMap[ReceivedVote.s][CurrentPeriodSlot][ReceivedVote.I][0] == ReceivedVote || AddressToVoteMap[ReceivedVote.s][CurrentPeriodSlot][ReceivedVote.I][1] == ReceivedVote)
+            return;
+//
+        //Equivocation in a proposal step is not allowed
+        if (ReceivedVote.s != 1)
+            return;
+//
+//        //Second equivocations are not allowed
+//        if (AddressToVoteMap[ReceivedVote.s][0][ReceivedVote.I][1].weight != 0)
+//            return;
+//
+        IsEquivocation = true;
+    }
+
     if (ReceivedVote.r < round) return;
     if (ReceivedVote.r == round+1 && (ReceivedVote.p > 0 || (ReceivedVote.s > 3 && ReceivedVote.s < 253))) return;
     if (ReceivedVote.r == round && (
             (ReceivedVote.p < period==0?0:period-1 || ReceivedVote.p > period+1) ||
             (ReceivedVote.p == period+1 && (ReceivedVote.s > 3 && ReceivedVote.s < 253)) ||
             (ReceivedVote.p == period && (ReceivedVote.s > 3 && ReceivedVote.s < 253) && (ReceivedVote.s < step==0?0:step-1 || ReceivedVote.s > step+1)) ||
-            (ReceivedVote.p == period-1 && (ReceivedVote.s > 3 && ReceivedVote.s < 253) && (ReceivedVote.s < lastConcludingStep==0?0:lastConcludingStep-1 || ReceivedVote.s > lastConcludingStep+1)) )) return;
+            (ReceivedVote.p == period-1 && (ReceivedVote.s > 3 && ReceivedVote.s < 253) && (ReceivedVote.s < lastConcludingStep==0?0:lastConcludingStep-1 || ReceivedVote.s > lastConcludingStep+1)) )) 
+            return;
 
-    //observe vote
+
+    //load vote into address map
+    if (!IsEquivocation)
+        AddressToVoteMap[ReceivedVote.s][CurrentPeriodSlot][ReceivedVote.I][0] = ReceivedVote;
+    else
+    {
+//        AddressToVoteMap[ReceivedVote.s][0][ReceivedVote.I][1] = ReceivedVote;
+//        CombinedEquivocationWeight[ReceivedVote.s][ReceivedVote.p%2] += ReceivedVote.weight;
+
+        //check if the closest bundle for the given step passes the threshold
+        //if it does, it's found
+        //could there be more than one CLOSEST BUNDLE and so we'd have two commitable bundles? posible ataque?
+//        if (ClosestBundle[ReceivedVote.s]->weight)
+
+        return;
+    }
+
 
     //proposal votes have no bundles
     if (ReceivedVote.s == 0)
@@ -188,14 +315,15 @@ void ParticipationNode::HandleVote(Vote& ReceivedVote)
         return;
     }
 
+
     //if active bundle is finished, move to finished bundles
-    Bundle* ActiveBundlesRef = &ActiveBundles[period%2][ReceivedVote.v.d][ReceivedVote.s];
+    Bundle* ActiveBundlesRef = &ActiveBundles[CurrentPeriodSlot][ReceivedVote.v.d][ReceivedVote.s];
     ActiveBundlesRef->votes.push_back(ReceivedVote);
     ActiveBundlesRef->weight += ReceivedVote.weight;
 
-    if (ActiveBundlesRef->weight >= CommitteeThreshold(ReceivedVote.s))
+    if (ActiveBundlesRef->weight /*+ CombinedEquivocationWeight[ReceivedVote.p][ReceivedVote.s]*/ >= CommitteeThreshold(ReceivedVote.s))
     {
-        Bundle* FinishedBundlesRef = &FinishedBundles[period%2][ReceivedVote.v.d][ReceivedVote.s];
+        Bundle* FinishedBundlesRef = &FinishedBundles[CurrentPeriodSlot][ReceivedVote.v.d][ReceivedVote.s];
         FinishedBundlesRef->votes.swap(ActiveBundlesRef->votes);
         FinishedBundlesRef->weight = ActiveBundlesRef->weight;
         ActiveBundlesRef->weight = 0;
@@ -227,6 +355,10 @@ void ParticipationNode::HandleVote(Vote& ReceivedVote)
         {
             //if it was a certification vote, I just completed a cert bundle
             ConfirmBlock(ReceivedVote.v.d);
+
+            //TESTING
+            UpdateBalances();
+
             GarbageCollectStateForNewRound();
             StartNewRound();
 
@@ -240,7 +372,7 @@ void ParticipationNode::HandleVote(Vote& ReceivedVote)
 
 
             //start new period
-            GarbageCollectStateForNewPeriod();
+            GarbageCollectStateForNewPeriod(ReceivedVote.p+1);
             StartNewPeriod(ReceivedVote.p);
 
             EV << "STARTED NEW PERIOD: " << period << ", WITH PINNED VALUE: " << ReceivedVote.v.d << endl;
@@ -249,17 +381,25 @@ void ParticipationNode::HandleVote(Vote& ReceivedVote)
 }
 
 
-void ParticipationNode::HandleProposalPayload(ProposalPayload& ReceivedPP)
+void ParticipationNode::HandleProposal(ProposalPayload& ReceivedPP)
 {
     //validate proposal
     //TODO
 
+    if (CachedFullProposals[CurrentPeriodSlot].count(ReceivedPP.Cached.d))
+        return;
+
     P.push_back(ReceivedPP);
+    CachedFullProposals[CurrentPeriodSlot][ReceivedPP.Cached.d] = ReceivedPP.e;
 }
 
 
 void ParticipationNode::HandleBundle(Bundle& ReceivedBundle)
 {
+    //TODO: validate bundle
+    if (!VerifyBundle(ReceivedBundle) || ReceivedBundle.votes[0].r != round || ReceivedBundle.votes[0].p+1 < period)
+        return;
+
     for(Vote& vt : ReceivedBundle.votes)
         HandleVote(vt);
 }
@@ -280,25 +420,66 @@ void ParticipationNode::GarbageCollectStateForNewRound()
     MuValue = EMPTY_PROPOSAL_VALUE;
     ActiveBundles[0].clear();
     ActiveBundles[1].clear();
+    ActiveBundles[2].clear();
     FinishedBundles[0].clear();
     FinishedBundles[1].clear();
+    FinishedBundles[2].clear();
+
+    for (int i = 0; i < 3; i++) FastRecoveryVotes[i].clear();
 
     ProposalVotes.clear();
+    P.clear();
+    for (int i = 0; i < 3; i++) CachedFullProposals[i].clear();
+
+    for (int i = 0; i < 256; i++)
+        for (int h = 0; h < 3; h++)
+            AddressToVoteMap[i][h].clear();
+
+    CurrentPeriodSlot = 0;
 }
 
 
-void ParticipationNode::GarbageCollectStateForNewPeriod()
+void ParticipationNode::GarbageCollectStateForNewPeriod(uint64_t NewPeriod)
 {
     cancelEvent(TimeoutEvent);
     cancelEvent(FastResyncEvent);
 
+    ProposalVotes.clear();
+    P.clear();
+
     //extra stuff to re-initialize
     SigmaBundle = nullptr;
     MuValue = EMPTY_PROPOSAL_VALUE;
-    ActiveBundles[(period+1)%2].clear();
-    FinishedBundles[(period+1)%2].clear();
 
-    ProposalVotes.clear();
+    //TODO: feo. Ver como estructurar esto mas legible
+    //basicamente, si el periodo nuevo es period+2, borro lo de period tambien (ya no lo necesito)
+    //si el periodo nuevo es mas grande que period+2, borro todo
+
+    ActiveBundles[GetPrevPeriodSlot()].clear();
+    FinishedBundles[GetPrevPeriodSlot()].clear();
+    CachedFullProposals[GetPrevPeriodSlot()].clear();
+    for (int i = 0; i < 256; i++)
+        AddressToVoteMap[i][GetPrevPeriodSlot()].clear();
+
+    if (NewPeriod >= period+2)
+    {
+        ActiveBundles[CurrentPeriodSlot].clear();
+        FinishedBundles[CurrentPeriodSlot].clear();
+        CachedFullProposals[CurrentPeriodSlot].clear();
+        for (int i = 0; i < 256; i++)
+            AddressToVoteMap[i][CurrentPeriodSlot].clear();
+    }
+
+    if (NewPeriod > period+2)
+    {
+        ActiveBundles[GetNextPeriodSlot()].clear();
+        FinishedBundles[GetNextPeriodSlot()].clear();
+        CachedFullProposals[GetNextPeriodSlot()].clear();
+        for (int i = 0; i < 256; i++)
+            AddressToVoteMap[i][GetNextPeriodSlot()].clear();
+    }
+
+    CurrentPeriodSlot = GetNextPeriodSlot();
 }
 
 
@@ -343,7 +524,7 @@ ProposalValue ParticipationNode::Mu()
 uint256_t ParticipationNode::ComputeLowestCredValue(VRFOutput& Credential, uint64_t weight)
 {
     //faking it, but its min(H(VRFCredential || 0...j-1))
-    int randomIndex = rand() % weight;
+//    int randomIndex = rand() % weight;
 
     uint256_t lowestObservedVal = uint256_t(-1);
     //generator.seed(0);
@@ -357,15 +538,34 @@ uint256_t ParticipationNode::ComputeLowestCredValue(VRFOutput& Credential, uint6
 }
 
 
-void ParticipationNode::BlockProposal()
+uint256_t ParticipationNode::ComputeBlockHash(LedgerEntry& e)
+{
+    //TODO: find a CHEAP way to link block structure to computed hash
+//    if (e.Txns.size() == 0)
+//        return 0;
+//
+//    uint256_t seed = 0;
+//    if (e.Txns.size() <= 1)
+//        seed = e.Txns[0].txnID;
+//
+//    for (int i = 1; i < e.Txns.size(); i++)
+//        seed = seed ^ e.Txns[i].txnID;
+//
+//    BlockHashGenerator.seed(int(seed));
+//    return BlockHashGenerator();
+
+    return rand();
+}
+
+
+void ParticipationNode::BlockProposal(LedgerEntry& e)
 {
   uint64_t TotalStake = TotalStakedAlgos();
-  //LedgerEntry SelectedBlock = Block;
-  //ProposalPayload chosenProposalPayload;
 
   ProposalValue chosenProposal;
-  uint256_t blockHash = rand();
   uint256_t lowestCredHashValue = uint256_t(-1);
+
+  uint256_t blockHash = ComputeBlockHash(e);
 
   for (Account& a : onlineAccounts)
   {
@@ -393,10 +593,15 @@ void ParticipationNode::BlockProposal()
   {
       Vote vt(chosenProposal.I_orig, round, period, 0, chosenProposal, chosenProposal.Cached.Credentials, chosenProposal.Cached.weight);
       Broadcast(vt);
+
+      ProposalPayload pp(e);
+      pp.I_orig = chosenProposal.I_orig;
+      pp.p_orig = chosenProposal.p_orig;
+      pp.Cached.d = chosenProposal.d;
+      Broadcast(pp);
   }
 
   EV << "PROPOSAL FINISHED";
-  //TODO: broadcast actual proposal!
 }
 
 
@@ -407,7 +612,7 @@ void ParticipationNode::SoftVote()
 
     if (v != EMPTY_PROPOSAL_VALUE)
     {
-        if(v.p_orig == period || FinishedBundles[period%2].count(v.d)) //&& FinishedBundles[period%2].votes[0].p == period-1) )  //seria lo mismo que pinnedValue == v? No, porque es especificamente p-1 (y no p-i)
+        if(v.p_orig == period || FinishedBundles[CurrentPeriodSlot].count(v.d)) //&& FinishedBundles[CurrentPeriodSlot].votes[0].p == period-1) )  //seria lo mismo que pinnedValue == v? No, porque es especificamente p-1 (y no p-i)
             for (Account& a : onlineAccounts)
             {
                 VRFOutput credentials;
@@ -418,7 +623,7 @@ void ParticipationNode::SoftVote()
                 Broadcast(voteToCast);
             }
     }
-    else if (pinnedValue != EMPTY_PROPOSAL_VALUE && FinishedBundles[(period+1)%2].count(pinnedValue.d) && !FinishedBundles[(period+1)%2].count(EMPTY_PROPOSAL_VALUE.d))
+    else if (pinnedValue != EMPTY_PROPOSAL_VALUE && FinishedBundles[GetPrevPeriodSlot()].count(pinnedValue.d) && !FinishedBundles[GetPrevPeriodSlot()].count(EMPTY_PROPOSAL_VALUE.d))
     {
         for (Account& a : onlineAccounts)
         {
@@ -450,7 +655,7 @@ void ParticipationNode::NextVote()
         Vote voteToCast(a.I, round, period, step, Sigma(), credentials, accWeight);
         if (!IsCommitable(voteToCast.v))
         {
-            if (FinishedBundles[period%2].count(EMPTY_PROPOSAL_VALUE.d) == 0 && FinishedBundles[period%2].count(pinnedValue.d) > 0)
+            if (FinishedBundles[CurrentPeriodSlot].count(EMPTY_PROPOSAL_VALUE.d) == 0 && FinishedBundles[CurrentPeriodSlot].count(pinnedValue.d) > 0)
             {
 //                //TODO: chequear que period deberia ser p-1. Sino tambien hay algo muy mal
 //                if (FinishedBundles[pinnedValue.d][0].votes.size() ||
@@ -527,7 +732,7 @@ void ParticipationNode::FastRecovery()
         }
     }
 
-    //broadcast all late, redo and down votes observed
+    //broadcast all late, redo and down votes observed (ya lo estoy haciendo, habria que ver si es correcto)
     //TODO: COMO hago esto? Que hago con sortition aca? Lo hago una vez por nodo, una vez por cuenta,una vez por miembro de comite?
     //el voto que broadcasteo lo tengo que pesar segun la cuenta?
 }
@@ -545,12 +750,22 @@ bool ParticipationNode::IsCommitable(ProposalValue& v)
 
 void ParticipationNode::ResynchronizationAttempt()
 {
-    
+    //VER! tema sortition aca...deberia correr esto por cuenta?
+    if(FreshestBundle && FreshestBundle->votes.size())
+    {
+        Broadcast(*FreshestBundle);
+        if (FreshestBundle->votes[0].v != EMPTY_PROPOSAL_VALUE && CachedFullProposals[CurrentPeriodSlot].count(FreshestBundle->votes[0].v.d))
+        {
+            //la reconstruyo y refirmo, o la mando tal cual esta, o como hago? Conviene mas guardarme la pp que la proposal? ver
+//            Broadcast(pp);
+        }
+    }
 }
 
 
-// void ParticipationNode::HandleProposal(ProposalPayload& ReceivedProposal)
-// {
+//void ParticipationNode::HandleProposal(ProposalPayload& ReceivedProposal)
+//{
+
 //     ProposalValue v;
 //     //find proposal value for ledger entry
 //     for (auto& val : ObservedProposals)
@@ -572,8 +787,7 @@ void ParticipationNode::ResynchronizationAttempt()
 //     //TODO. Send to everybody except OriginalProposer and myself, and maybe sender? Do I have the data of who sent it to me?
 
 //     if (IsCommitable(v) && step < cert)
-
-// }
+//}
 
 
 // void ParticipationNode::AddGenesisBlock()
@@ -586,7 +800,6 @@ void ParticipationNode::ResynchronizationAttempt()
 
 
  #if SIMULATE_VRF
-
  VRFOutput ParticipationNode::SimulateVRF()
  {
      VRFOutput Out;
@@ -603,7 +816,6 @@ void ParticipationNode::ResynchronizationAttempt()
 
      return Out;
  }
-
  #endif
 
 
@@ -704,23 +916,66 @@ void ParticipationNode::ResynchronizationAttempt()
  }
 
 
-// LedgerEntry ParticipationNode::BlockAssembly()
-// {
-//     LedgerEntry e;
-//     e.PlaceholderID = (rand() % 100)+1;
-//     return e;
-// }
-
-
 uint64_t ParticipationNode::TotalStakedAlgos()
 {
      return uint64_t(TOTAL_NODES) * uint64_t(START_MONEY) * uint64_t(TOTAL_ACCOUNTS);
 }
 
 
+#if SIMPLIFIED_BLOCKS
+LedgerEntry ParticipationNode::BlockAssembly()
+{
+    LedgerEntry e;
+    e.Txns.swap(TransactionPool);
+
+    return e;
+}
+
+
 void ParticipationNode::ConfirmBlock(uint256_t fakeEntry)
 {
-     //TODO: agregar bloques de verdad
-     //Ledger.Entries.push_back(hblock);
+    //SI no tengo la proposal, lo tengo que resolver aca
+
+
+    //TODO: agregar bloques de verdad
+    //Ledger.Entries.push_back(hblock);
     Ledger.SimEntries.push_back(fakeEntry);
+}
+#else
+LedgerEntry ParticipationNode::BlockAssembly()
+{
+    auto e = LedgerEntry();
+    auto n_tp = TransactionPool.size();
+
+    std::move(TransactionPool.rbegin()+(n_tp>10?10:n_tp), TransactionPool.rbegin(), e.Txns.begin());
+
+    return LedgerEntry();
+}
+
+
+void ParticipationNode::ConfirmBlock(LedgerEntry& e)
+{
+     //TODO: agregar bloques de verdad
+     Ledger.Entries.push_back(e);
+}
+#endif
+
+
+
+
+void ParticipationNode::ReceiveTransaction(Transaction& txn)
+{
+    TransactionPool.push_back(txn);
+}
+
+
+bool ParticipationNode::VerifyVote(Vote& vt)
+{
+    return true;
+}
+
+
+bool ParticipationNode::VerifyBundle(Bundle& b)
+{
+    return true;
 }

@@ -1,3 +1,6 @@
+#ifndef DATATYPEDEFINITIONS_H_
+#define DATATYPEDEFINITIONS_H_
+
 #include <vector>
 #include <boost/multiprecision/cpp_int.hpp>
 #include <boost/multiprecision/cpp_int.hpp>
@@ -5,12 +8,63 @@
 #include <cstring>
 #include <string>
 
+
 typedef boost::multiprecision::uint256_t uint256_t;
 typedef boost::multiprecision::cpp_int BigInt;
 typedef boost::multiprecision::number<boost::multiprecision::cpp_bin_float<156>> BigFloat; //2**(64*8) has 155 decimal digits
 
 
 typedef uint256_t Address;
+
+
+class BalanceRecord
+{
+public:
+    uint64_t RawBalance;
+    bool OnlineStatus;
+
+    //TODO: keys
+
+    BalanceRecord(){}
+    BalanceRecord(uint64_t rb, bool status):RawBalance(rb), OnlineStatus(status), OldBalance(0), OldStatus(true){}
+
+    //cached for lookup
+    uint64_t OldBalance;
+    uint64_t OldStatus;
+
+    //TODO: old keys
+};
+
+
+//transaction stuff
+//work in progress
+//enum txnType {};
+class Transaction
+{
+public:
+    Transaction(){}
+
+    uint256_t txnID;
+    //txnType type;  //por ahora, solo pay
+
+    Address Sender;
+    Address Receiver;
+
+    uint64_t Amount;
+
+    //VER TEMA FEES
+    uint64_t Fee;
+};
+
+
+class SignedTransaction
+{
+    Transaction Txn;
+
+    //signature
+};
+
+
 
 
 struct VRFKeyPair
@@ -71,11 +125,23 @@ struct stSeedAndProof
 
 struct LedgerEntry
 {
+    LedgerEntry()
+    {
+
+    }
+    LedgerEntry(int v):PlaceholderID(v){}
+
+
     //o is some opaque object O
     //unsigned char* Obj;
     int PlaceholderID;
 
+    //header
+    //TODO: ALL HEADER STUFF
     stSeedAndProof SeedAndProof;
+
+    //body
+    std::vector<Transaction> Txns;
 
     VRFOutput ProposerCredentials;
     Address ProposerAddress;
@@ -83,13 +149,6 @@ struct LedgerEntry
 
 
     uint256_t cachedCredentialSVHash;
-
-
-    LedgerEntry()
-    {
-
-    }
-    LedgerEntry(int v):PlaceholderID(v){}
 
 
     unsigned char* Encoding()
@@ -106,6 +165,12 @@ struct LedgerEntry
 
 struct Ledger
 {
+    //Ledger params
+    uint64_t TMax = 1000; //length of the transaction tail
+    uint64_t BMax = 5242880; //maximum number of txn bytes per block
+    uint64_t bMin = 100000; //minimum balance for an address
+
+
     bool ValidEntry(LedgerEntry e){return true; }
     std::string SeedLookup(uint64_t round){return Entries[round>0? round : 0].SeedAndProof.Seed;}
     //TODO RecordLookup
@@ -125,17 +190,32 @@ struct ProposalPayload
     LedgerEntry e;
     uint256_t y;   //signature
 
+    //de acuerdo con messageDecodeFilter_test.go esto va acá también
+    Address I_orig;
+    uint64_t p_orig;
 
-    bool operator() (const ProposalPayload& lhs, const ProposalPayload& rhs) const
+
+    ProposalPayload(){}
+    ProposalPayload(LedgerEntry& entry):e(entry){}
+
+
+
+    struct performanceCachedStuff
     {
-        return lhs.e.PlaceholderID < rhs.e.PlaceholderID;
-    }
-
+        uint256_t d; //digest(e), useful for looking up all votes associated with this proposal
+    }Cached;
 };
 
 
 struct ProposalValue
 {
+    ProposalValue()
+    {
+        I_orig = 0; p_orig = 0; d = 0; Cached.weight = 0; Cached.lowestComputedHash = 0;
+
+    }
+
+
     Address I_orig;
     uint64_t p_orig;
 
@@ -155,13 +235,6 @@ struct ProposalValue
 
         uint256_t lowestComputedHash;
     }Cached;
-
-
-    ProposalValue()
-    {
-        I_orig = 0; p_orig = 0; d = 0; Cached.weight = 0; Cached.lowestComputedHash = 0;
-
-    }
 
 
     bool operator==(const ProposalValue& a) const
@@ -189,15 +262,14 @@ struct Vote
     VRFOutput VRFOut;
     uint64_t weight;
 
-    //unsigned char* signature;
+    unsigned char signature[64];
 
-
-    bool operator() (const Vote& lhs, const Vote& rhs) const
+    bool operator == (const Vote& rhs) const
     {
-        return lhs.s < rhs.s;
+        return I == rhs.I && r == rhs.r && p == rhs.p && s == rhs.s && v == rhs.v && weight == rhs.weight;
     }
 
-    Vote(){}
+    Vote():I(0), r(0), p(0), s(0), weight(0){}
     Vote(Address addr, uint64_t round, uint64_t period, uint8_t step, ProposalValue propVal, VRFOutput cred, uint64_t j):
         I(addr), r(round), p(period), s(step), v(propVal), VRFOut(cred), weight(j){}
 };
@@ -205,8 +277,10 @@ struct Vote
 
 struct EquivocationVote
 {
-    Vote voteA;
-    Vote voteB;
+    Vote* voteA;
+    Vote* voteB;
+
+//    static bool IsEquivocation()
 };
 
 
@@ -216,13 +290,6 @@ struct Bundle
     std::vector<Vote> votes;
 
     Bundle():weight(0){}
-};
-
-
-struct BalanceTracker
-{
-    uint64_t TotalStakedMoney;
-    std::vector<uint64_t> CachedBalance;
 };
 
 
@@ -268,3 +335,33 @@ static BigInt byte_array_to_cpp_int(unsigned char* n, uint64_t len)
 
 
 static inline unsigned char* uchar_ptr(std::string& str){return (unsigned char*)(str.data());}
+
+
+
+
+
+
+
+//some network level stuff
+struct Relay
+{
+    //in this model, relay nodes act as connections in between participation nodes
+    //if there's no route between two nodes, they can't send messages to each other
+
+    //acts as an address
+    uint64_t RelayID;
+
+    //list of part nodes to send messages to / get messages from
+    //TODO
+
+    std::vector<int> RelayConnections;          //Relay node IDs in network list
+    std::vector<int> ParticipationConnections;  //Participation node IDs in network list
+
+    //TODO: some stats (reception delay time, output delay time, etc.)
+};
+
+
+enum MsgType{TXN, PROPOSAL, VOTE, BUNDLE};
+
+
+#endif

@@ -27,6 +27,10 @@ simple RelayNode
         inout gate[];
 }
 
+simple GlobalSimulationManager
+{
+}
+
 
 network AlgorandNetwork
 {
@@ -35,10 +39,11 @@ network AlgorandNetwork
 //	int partCount = 1600;
 //	int relCount = 160;
 	
-	int partCount = 200;
+	int partCount = 500;
 //	int relCount = 1;
 
     submodules:
+        Manager : GlobalSimulationManager;
         PartNode[partCount]: ParticipationNode;
 //        RelayNode[relCount]: RelayNode;
         

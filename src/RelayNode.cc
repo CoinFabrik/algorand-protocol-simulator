@@ -27,7 +27,7 @@ RelayNode::RelayNode()
 
 RelayNode::~RelayNode()
 {
-    for (auto& m : ReusableMessages) cancelAndDelete(m);
+//    for (auto& m : ReusableMessages) cancelAndDelete(m);
 }
 
 
@@ -39,16 +39,16 @@ void RelayNode::initialize()
 
 void RelayNode::handleMessage(cMessage* m)
 {
-    AlgorandMessage* msg = (AlgorandMessage*)(m);
-    int baseId = gateBaseId("gate$o"), size = gateSize("gate$o");
-    int senderIdx = msg->getArrivalGate()->getIndex();
-
-    for (int i = 0; i < size; i++)
-    {
-        if (senderIdx != i)
-        {
-            send(AlgorandMessage::DuplicateMessage(ReusableMessages, msg), gate(baseId + i));
-        }
-    }
-    AlgorandMessage::RecycleMessage(this, ReusableMessages, msg);
+//    AlgorandMessage* msg = (AlgorandMessage*)(m);
+//    int baseId = gateBaseId("gate$o"), size = gateSize("gate$o");
+//    int senderIdx = msg->getArrivalGate()->getIndex();
+//
+//    for (int i = 0; i < size; i++)
+//    {
+//        if (senderIdx != i)
+//        {
+//            send(AlgorandMessage::DuplicateMessage(ReusableMessages, msg), gate(baseId + i));
+//        }
+//    }
+//    AlgorandMessage::RecycleMessage(this, ReusableMessages, msg);
 }
