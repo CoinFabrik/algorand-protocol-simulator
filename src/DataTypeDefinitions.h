@@ -272,6 +272,7 @@ struct Vote
     Vote():I(0), r(0), p(0), s(0), weight(0){}
     Vote(Address addr, uint64_t round, uint64_t period, uint8_t step, ProposalValue propVal, VRFOutput cred, uint64_t j):
         I(addr), r(round), p(period), s(step), v(propVal), VRFOut(cred), weight(j){}
+//    Vote(Vote& vt):I(vt.I), r(vt.r), p(vt.p), s(vt.s), v(vt.v), VRFOut(vt.VRFOut), weight(vt.weight){}
 };
 
 
@@ -291,6 +292,9 @@ struct Bundle
 
     Bundle():weight(0){}
 };
+
+
+enum MsgType{TXN, PROPOSAL, VOTE, BUNDLE};
 
 
 inline unsigned int CommitteeSize(uint8_t Step)
@@ -335,33 +339,6 @@ static BigInt byte_array_to_cpp_int(unsigned char* n, uint64_t len)
 
 
 static inline unsigned char* uchar_ptr(std::string& str){return (unsigned char*)(str.data());}
-
-
-
-
-
-
-
-//some network level stuff
-struct Relay
-{
-    //in this model, relay nodes act as connections in between participation nodes
-    //if there's no route between two nodes, they can't send messages to each other
-
-    //acts as an address
-    uint64_t RelayID;
-
-    //list of part nodes to send messages to / get messages from
-    //TODO
-
-    std::vector<int> RelayConnections;          //Relay node IDs in network list
-    std::vector<int> ParticipationConnections;  //Participation node IDs in network list
-
-    //TODO: some stats (reception delay time, output delay time, etc.)
-};
-
-
-enum MsgType{TXN, PROPOSAL, VOTE, BUNDLE};
 
 
 #endif

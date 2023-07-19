@@ -22,21 +22,25 @@
 #define KEEP_GLOBAL_LEDGER 1
 
 
-#define TOTAL_NODES 500
-#define START_MONEY 100000
+#define TOTAL_NODES 400
+#define RELAYS 100
+#define START_MONEY 1000000
 #define TOTAL_ACCOUNTS 10
+
+//logging defines
+#define LOG_STEP_EVENTS 1
 
 
 //OMNET includes
 #include <omnetpp.h>
-//#include <omnetpp/cqueue.h>
-//#include "MessageDefinitions.h"
+#include <iomanip>
 #include "DataTypeDefinitions.h"
 
 //C/C++ standard includes
 #include <iostream>
 #include <string.h>
 #include <stdlib.h>
+#include <deque>
 #include <algorithm>
 #include <random>
 #include <unordered_map>
@@ -53,30 +57,12 @@
 using namespace omnetpp;
 
 
-/**********************************************************************************/
-//PROTOCOL PARAMETERS (from abft.pdf in specs)
-unsigned int SeedLookback = 2;
-unsigned int SeedRefreshInterval = 80;
-unsigned int BalanceLookback = 2*SeedLookback*SeedRefreshInterval;
-
-//time parameters (in seconds)
-float Lambda = 2.f;
-float Lambda0 = 1.7f;
-float LambdaF = 300.f; //5 min
-float UppercaseLambda = 17.f;
-
-inline float FilterTimeout(unsigned int p){return 2.f * (p==0? Lambda0 : Lambda);}
-
-//useful constants
-ProposalValue EMPTY_PROPOSAL_VALUE;
-Address FEE_SINK = 0;
-/**********************************************************************************/
-
-
-#if GLOBAL_BALANCE_TRACKER
-std::unordered_map<Address, BalanceRecord> BalanceMap;
+//logging of step events. Output is | "S" | node index | round | period | step number | simulation time | chronological time|
+#if LOG_STEP_EVENTS
+    #define OUT_LOG_STEP_EVENT() EV <<"S " << getIndex() << " " << round << " " << period << " "<< int(step) << " " << simTime() << " " << std::setprecision(15) << GlobalSimulationManager::SimManager->GetCurrentChronoTime().count() << endl
+#else
+    #define OUT_LOG_STEP_EVENT() ;
 #endif
-
 
 
 class ParticipationNode: public cSimpleModule
@@ -128,10 +114,8 @@ public:
     //observed proposals set
     std::vector<ProposalPayload> P;
 
-    //boradcasting functions
-    void Broadcast(Vote& v);
-    void Broadcast(ProposalPayload& p);
-    void Broadcast(Bundle& b);
+    //multi-purpose boradcasting function
+    void Broadcast(void* data, MsgType type);
 
     //helper functions for special values
     ProposalValue Sigma();
@@ -202,9 +186,16 @@ public:
 //    uint64_t CombinedEquivocationWeight[2][255];
 
     //message reception handlers
+    void HandleTransaction(Transaction& ReceivedTxn);
     void HandleVote(Vote& ReceivedVote);
     void HandleProposal(ProposalPayload& ReceivedPP);
     void HandleBundle(Bundle& ReceivedBundle);
+
+
+    void TEST_ScheduleVoteHandling(float delay, Vote& vt);
+    std::vector<Vote> VoteQueue;
+
+
 
 
     void ResynchronizationAttempt();
@@ -229,8 +220,6 @@ public:
     std::vector<Transaction> TransactionPool;
     void SimulateTransactions();
     Transaction GenerateRandomTransaction();
-    void Broadcast(Transaction& txn);
-    void ReceiveTransaction(Transaction& txn);
 
 
 

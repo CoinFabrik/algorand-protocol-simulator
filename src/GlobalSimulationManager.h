@@ -19,9 +19,18 @@
 #include <omnetpp.h>
 #include <unordered_map>
 #include <deque>
+#include <algorithm>
+#include <chrono>
+#include <iostream>
+#include <fstream>
+#include <string>
 
 #ifndef DATATYPEDEFINITIONS_H_
     #include "DataTypeDefinitions.h"
+#endif
+
+#ifndef PARTICIPATIONNODE_H_
+    #include "ParticipationNode.h"
 #endif
 
 using namespace omnetpp;
@@ -29,29 +38,33 @@ using namespace omnetpp;
 
 
 
-//struct NetworkState
-//{
-//    NetworkState(){}
-//    NetworkState(int nRelays, int nPartNodes)
-//    {
-//        MatrixGraphRepresentation.resize(nRelays+nPartNodes);
-//        for (auto& v : MatrixGraphRepresentation)
-//            v.resize(nRelays);
-//
-//        //every partNode will connect to 4 relays
-//        for (int i = 0; i < nPartNodes; i++)
-//        {
-//            int relayToConnect1 = rand()%nRelays;
-//            int relayToConnect2 = rand()%nRelays;
-//            int relayToConnect3 = rand()%nRelays;
-//            int relayToConnect4 = rand()%nRelays;
-//        }
-//
-//        //every relay will connect to 10
-//    }
-//
-//    std::vector<std::vector<uint8_t>> MatrixGraphRepresentation;
-//};
+struct Relay
+{
+    //in this model, relay nodes act as connections in between participation nodes
+    //note that if there's no route between two nodes, they can't send messages to each other
+
+    //acts as an address
+    uint64_t RelayID;
+
+    //Actual connections. IDs are positions in the over-arching network definition
+    std::vector<int> RelayConnections;          //Relay node IDs in network list
+    std::vector<int> ParticipationConnections;  //Participation node IDs in network list
+
+    //connection delays
+    struct ConnectionDelays
+    {
+        //if false, connection is down
+//        bool ConnectionStatus = true;
+
+        simtime_t InDelay;
+        simtime_t OutDelay;
+
+//        simtime_t InDelayVariance;
+//        simtime_t OutDelayVariance;
+    };
+    std::vector<ConnectionDelays> RelayConnectionDelays;
+    std::vector<ConnectionDelays> PartNodeConnectionDelays;
+};
 
 
 
@@ -59,14 +72,21 @@ using namespace omnetpp;
 class NetworkDefinition
 {
 public:
+    bool InitializedNetwork;
+
+    std::vector<std::vector<int>> MatrixGraph;
+
     std::vector<Relay> RelayNodes;
     std::vector<class ParticipationNode*> ParticipationNodes;
+
+
+    void LoadNetworkFromFile();
+
 
     NetworkDefinition(){}
     void InitNetwork(int nRelayNodes, int nPartNodes);
 
-
-    void PropagateMessageThroughNetwork(std::vector<int>& PendingRelayNodeVector, int SenderPartNode, void* msg, MsgType type);
+    void LoadPartNode(class ParticipationNode* PartNode, int PartNodeIndex, std::vector<int>& RelayConnections);
 };
 
 
@@ -78,9 +98,13 @@ public:
     virtual ~GlobalSimulationManager(){}
     void initialize(){}
 
-
     //singleton instance
     static GlobalSimulationManager* SimManager;
+
+
+    //chronological time measuring
+    std::chrono::time_point<std::chrono::high_resolution_clock> StartTime;
+    std::chrono::duration<double> GetCurrentChronoTime(){return std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - StartTime); }
 
 
     //represents "canonical" data
@@ -92,17 +116,14 @@ public:
     NetworkDefinition Network;
 
 
+    void PropagateMessageThroughNetwork(std::vector<int>& PendingRelayNodeVector, int SenderPartNode, void* msg, MsgType type);
 
 
-//    //Stat collection
-//    struct NodeRoundStats
-//    {
-//        uint64_t StartSimTime;
-//        uint64_t EndSimTime;
-//
-//        //CONFIRMED BLOCK?
-//    };
-//    std::vector<std::vector<NodeRoundStats>> PerRoundStats;
+    //scenario load and run data and functions
+    void LoadContextFromFiles(std::string& NetworkDef_filename, std::string& CF_filename);
+    void LoadEventsFromEF(std::string& filename);
+
+    //std::vector<class SimulationEvent*> SimEventQueue;
 };
 
 

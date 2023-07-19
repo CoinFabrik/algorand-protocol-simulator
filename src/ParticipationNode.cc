@@ -19,6 +19,25 @@
 
 Define_Module(ParticipationNode);
 
+/**********************************************************************************/
+//PROTOCOL PARAMETERS (from abft.pdf in specs)
+unsigned int SeedLookback = 2;
+unsigned int SeedRefreshInterval = 80;
+unsigned int BalanceLookback = 2*SeedLookback*SeedRefreshInterval;
+
+//time parameters (in seconds)
+float Lambda = 2.f;
+float Lambda0 = 1.7f;
+float LambdaF = 300.f; //5 min
+float UppercaseLambda = 17.f;
+
+inline float FilterTimeout(unsigned int p){return 2.f * (p==0? Lambda0 : Lambda);}
+
+//useful constants
+ProposalValue EMPTY_PROPOSAL_VALUE;
+Address FEE_SINK = 0;
+/**********************************************************************************/
+
 
 ParticipationNode::ParticipationNode() : round(1), period(0), step(0), lastConcludingStep(0) //, pinnedVote(0)
 {
@@ -48,6 +67,19 @@ void ParticipationNode::initialize()
     scheduleAfter(0, TimeoutEvent);
 
     InitOnlineAccounts();
+
+
+    //initialize relay connections. Por ahora, 4 relays random
+    for (int i = 0; i < 4; i++)
+    {
+        int RelayToConnect = rand() % RELAYS;
+        while(std::find(RelayConnections.begin(), RelayConnections.end(), RelayToConnect) != RelayConnections.end()) RelayToConnect = rand() % RELAYS;
+
+        RelayConnections.push_back(RelayToConnect);
+    }
+
+    //update sim manager network relay and part node data accordingly
+    GlobalSimulationManager::SimManager->Network.LoadPartNode(this, this->getIndex(), RelayConnections);
 }
 
 
@@ -59,8 +91,6 @@ void ParticipationNode::InitOnlineAccounts()
         onlineAccounts.push_back(NewAccount);
 
         //initialize global balance tracker
-        BalanceMap[NewAccount.I] =  BalanceRecord(NewAccount.Money, true);
-
         GlobalSimulationManager::SimManager->BalanceMap[NewAccount.I] =  BalanceRecord(NewAccount.Money, true);
     }
 }
@@ -86,8 +116,8 @@ void ParticipationNode::UpdateBalances()
     for (Transaction& txn : LastBlock.Txns)
     {
         //por ahora solo pay
-        BalanceMap[txn.Sender].RawBalance -= txn.Fee + txn.Amount;
-        BalanceMap[txn.Receiver].RawBalance += txn.Amount;
+        GlobalSimulationManager::SimManager->BalanceMap[txn.Sender].RawBalance -= txn.Fee + txn.Amount;
+        GlobalSimulationManager::SimManager->BalanceMap[txn.Receiver].RawBalance += txn.Amount;
 //        Balance[FEE_SINK_ADDRESS].RawBalance += txn.Fee;
     }
 
@@ -95,8 +125,8 @@ void ParticipationNode::UpdateBalances()
     for (Transaction& txn : LookbackBlock.Txns)
     {
         //por ahora solo pay
-        BalanceMap[txn.Sender].OldBalance -= txn.Fee + txn.Amount;
-        BalanceMap[txn.Receiver].OldBalance += txn.Amount;
+        GlobalSimulationManager::SimManager->BalanceMap[txn.Sender].OldBalance -= txn.Fee + txn.Amount;
+        GlobalSimulationManager::SimManager->BalanceMap[txn.Receiver].OldBalance += txn.Amount;
     }
 }
 
@@ -107,7 +137,7 @@ void ParticipationNode::SimulateTransactions()
     for (int i = 0; i < 10; i++)
     {
         Transaction txn = GenerateRandomTransaction();
-        Broadcast(txn);
+        Broadcast((void*)(&txn), TXN);
     }
 }
 
@@ -142,6 +172,7 @@ void ParticipationNode::handleMessage(cMessage* msg)
 
             startTime = simTime();
             step = 0;
+            OUT_LOG_STEP_EVENT();
 
             //schedule a soft vote
             TimeoutEvent->setKind(1);
@@ -156,19 +187,23 @@ void ParticipationNode::handleMessage(cMessage* msg)
 
             lastConcludingStep = 0;
             step = 1;
+            OUT_LOG_STEP_EVENT();
             //aca ya propuse, y me quedo esperando el soft
         }
         else if (msg->getKind() == 1)
         {
             step = 1;
+            OUT_LOG_STEP_EVENT();
+
 
             TimeoutEvent->setKind(3);
             scheduleAt(startTime + fmax(4.f * Lambda, UppercaseLambda), TimeoutEvent);
 
             SoftVote();
-            EV << "SOFT" << endl;
 
             step = 2;
+            OUT_LOG_STEP_EVENT();
+
             lastConcludingStep = 1;
 
             //certification vote happens from now on, but is driven by messages (not timeout)
@@ -176,10 +211,10 @@ void ParticipationNode::handleMessage(cMessage* msg)
         }
         else if (msg->getKind() < 253)  // >= 3 por definicion
         {
-            EV << "NEXT: " << int(msg->getKind()) << endl;
-
             lastConcludingStep = step;
             step = msg->getKind();
+
+            OUT_LOG_STEP_EVENT();
 
             //252 is the last next-vote. After this, its periodic cycles of late, recovery, redo
             if (msg->getKind() <= 251)
@@ -190,60 +225,64 @@ void ParticipationNode::handleMessage(cMessage* msg)
 
             NextVote();
         }
-        else //msg->getKind() >= 253
+        else if(msg->getKind() <= 255)
         {
             lastConcludingStep = step;
             step = 255;
+            OUT_LOG_STEP_EVENT();
+
             scheduleAfter(LambdaF + 0, FastResyncEvent);
 
             FastRecovery();
+        }
+
+        else if(msg->getKind() == 256)
+        {
+            if (VoteQueue.empty())
+            {
+                cancelAndDelete(msg);
+                return;
+            }
+
+            EV << "------------- START " << VoteQueue.back().v.d << endl;
+
+            Vote vt = VoteQueue.back();
+            HandleVote(vt);
+            VoteQueue.pop_back();
+
+
+            EV << "------------- END " << endl;
+
+            cancelAndDelete(msg);
         }
     }
 }
 
 
-void ParticipationNode::Broadcast(Bundle& b)
+void ParticipationNode::Broadcast(void* data, MsgType type)
 {
-    for (Vote& vt : b.votes)
-            Broadcast(vt);
+    GlobalSimulationManager::SimManager->PropagateMessageThroughNetwork(RelayConnections, getIndex(), data, type);
 }
 
 
-void ParticipationNode::Broadcast(ProposalPayload& pp)
+void ParticipationNode::TEST_ScheduleVoteHandling(float delay, Vote& vt)
 {
-    //broadcast a given proposal
-    for (int i = 0; i < TOTAL_NODES; i++)
-    {
-        std::string nodePath = "AlgorandNetwork.PartNode[" + std::to_string(i) + "]";
-        ParticipationNode* bro = (ParticipationNode*)(getModuleByPath(nodePath.c_str()));
-        bro->HandleProposal(pp);
-    }
+    Enter_Method_Silent("TEST_ScheduleVoteHandling");
+
+    Vote aux(vt.I, vt.r, vt.p, vt.s, vt.v, vt.VRFOut, vt.weight);
+    VoteQueue.push_back(aux);
+    scheduleAfter(delay, new cMessage(nullptr, 256));
 }
 
 
-void ParticipationNode::Broadcast(Vote& v)
+void ParticipationNode::HandleTransaction(Transaction& ReceivedTxn)
 {
-    //broadcast a given proposal
-    for (int i = 0; i < TOTAL_NODES; i++)
-    {
-        std::string nodePath = "AlgorandNetwork.PartNode[" + std::to_string(i) + "]";
-        ParticipationNode* bro = (ParticipationNode*)(getModuleByPath(nodePath.c_str()));
-        bro->HandleVote(v);
-    }
-}
+    //macro for methods called directly from foreign nodes (direct memory write optimization)
+    Enter_Method_Silent("HandleTransaction");
 
+    //TODO: validate?
 
-void ParticipationNode::Broadcast(Transaction& txn)
-{
-    GlobalSimulationManager::SimManager->Network.PropagateMessageThroughNetwork(RelayConnections, getIndex(), (void*)(&txn), TXN);
-
-    //broadcast a given proposal
-    for (int i = 0; i < TOTAL_NODES; i++)
-    {
-        std::string nodePath = "AlgorandNetwork.PartNode[" + std::to_string(i) + "]";
-        ParticipationNode* bro = (ParticipationNode*)(getModuleByPath(nodePath.c_str()));
-        bro->ReceiveTransaction(txn);
-    }
+//    TransactionPool.push_back(ReceivedTxn);
 }
 
 
@@ -306,7 +345,7 @@ void ParticipationNode::HandleVote(Vote& ReceivedVote)
     if (ReceivedVote.s == 0)
     {
         //save proposal vote somewhere?
-        ProposalVotes.push_back(ReceivedVote);
+//        ProposalVotes.push_back(ReceivedVote);
 
         if (MuValue == EMPTY_PROPOSAL_VALUE || ( ReceivedVote.v.Cached.lowestComputedHash < MuValue.Cached.lowestComputedHash))
         {
@@ -346,7 +385,7 @@ void ParticipationNode::HandleVote(Vote& ReceivedVote)
                     if (accWeight > 0)
                     {
                         Vote voteToCast(a.I, round, period, 2, ReceivedVote.v, credentials, accWeight);
-                        Broadcast(voteToCast);
+                        Broadcast((void*)(&voteToCast), VOTE);
                     }
                 }
             }
@@ -362,7 +401,7 @@ void ParticipationNode::HandleVote(Vote& ReceivedVote)
             GarbageCollectStateForNewRound();
             StartNewRound();
 
-            EV << "COMPLETED ROUND: " << round << ", BY COMMITING BLOCK WITH HASH: " << ReceivedVote.v.d << endl;
+            EV << "COMPLETED ROUND: " << round-1 << ", BY COMMITING BLOCK WITH HASH: " << ReceivedVote.v.d << endl;
         }
         else
         {
@@ -375,7 +414,7 @@ void ParticipationNode::HandleVote(Vote& ReceivedVote)
             GarbageCollectStateForNewPeriod(ReceivedVote.p+1);
             StartNewPeriod(ReceivedVote.p);
 
-            EV << "STARTED NEW PERIOD: " << period << ", WITH PINNED VALUE: " << ReceivedVote.v.d << endl;
+            EV << "STARTED NEW PERIOD: " << period-1 << ", WITH PINNED VALUE: " << ReceivedVote.v.d << endl;
         }
     }
 }
@@ -409,6 +448,9 @@ void ParticipationNode::HandleBundle(Bundle& ReceivedBundle)
 
 void ParticipationNode::GarbageCollectStateForNewRound()
 {
+//    EV << "SZ " << VoteQueue.size() << endl;
+    VoteQueue.clear();
+
     cancelEvent(TimeoutEvent);
     cancelEvent(FastResyncEvent);
     
@@ -592,16 +634,14 @@ void ParticipationNode::BlockProposal(LedgerEntry& e)
   if (chosenProposal != EMPTY_PROPOSAL_VALUE)
   {
       Vote vt(chosenProposal.I_orig, round, period, 0, chosenProposal, chosenProposal.Cached.Credentials, chosenProposal.Cached.weight);
-      Broadcast(vt);
+      Broadcast((void*)(&vt), VOTE);
 
       ProposalPayload pp(e);
       pp.I_orig = chosenProposal.I_orig;
       pp.p_orig = chosenProposal.p_orig;
       pp.Cached.d = chosenProposal.d;
-      Broadcast(pp);
+      Broadcast((void*)(&pp), PROPOSAL);
   }
-
-  EV << "PROPOSAL FINISHED";
 }
 
 
@@ -620,7 +660,7 @@ void ParticipationNode::SoftVote()
                 if (accWeight == 0) continue;
 
                 Vote voteToCast(a.I, round, period, 1, v, credentials, accWeight);
-                Broadcast(voteToCast);
+                Broadcast((void*)(&voteToCast), VOTE);
             }
     }
     else if (pinnedValue != EMPTY_PROPOSAL_VALUE && FinishedBundles[GetPrevPeriodSlot()].count(pinnedValue.d) && !FinishedBundles[GetPrevPeriodSlot()].count(EMPTY_PROPOSAL_VALUE.d))
@@ -632,7 +672,7 @@ void ParticipationNode::SoftVote()
             if (accWeight == 0) continue;
 
             Vote voteToCast(a.I, round, period, 1, pinnedValue, credentials, accWeight);
-            Broadcast(voteToCast);
+            Broadcast((void*)(&voteToCast), VOTE);
         }
     }
 }
@@ -668,7 +708,7 @@ void ParticipationNode::NextVote()
             else voteToCast.v = EMPTY_PROPOSAL_VALUE;
         }
 
-        Broadcast(voteToCast);
+        Broadcast((void*)(&voteToCast), VOTE);
     }
 
 }
@@ -691,11 +731,11 @@ void ParticipationNode::FastRecovery()
         if (accWeight > 0)
         {
             Vote voteToCast(a.I, round, period, 253, v, credentials, accWeight);
-            if (bLateCondition) Broadcast(voteToCast);
+            if (bLateCondition) Broadcast((void*)(&voteToCast), VOTE);
             for (auto& vt : FastRecoveryVotes[0])
             {
                 voteToCast.v = vt.v;
-                Broadcast(voteToCast);
+                Broadcast((void*)(&voteToCast), VOTE);
             }
 
             lastConcludingStep = 253;
@@ -706,11 +746,11 @@ void ParticipationNode::FastRecovery()
         if (accWeight > 0)
         {
             Vote voteToCast(a.I, round, period, 254, pinnedValue, credentials, accWeight);
-            if (bRedoCondition) Broadcast(voteToCast);
+            if (bRedoCondition) Broadcast((void*)(&voteToCast), VOTE);
             for (auto& vt : FastRecoveryVotes[1])
             {
                 voteToCast.v = vt.v;
-                Broadcast(voteToCast);
+                Broadcast((void*)(&voteToCast), VOTE);
             }
 
             lastConcludingStep = 254;
@@ -721,11 +761,11 @@ void ParticipationNode::FastRecovery()
         if (accWeight > 0)
         {
             Vote voteToCast(a.I, round, period, 255, EMPTY_PROPOSAL_VALUE, credentials, accWeight);
-            if (bRedoCondition) Broadcast(voteToCast);
+            if (bRedoCondition) Broadcast((void*)(&voteToCast), VOTE);
             for (auto& vt : FastRecoveryVotes[2])
             {
                 voteToCast.v = vt.v;
-                Broadcast(voteToCast);
+                Broadcast((void*)(&voteToCast), VOTE);
             }
 
             lastConcludingStep = 255;
@@ -753,7 +793,7 @@ void ParticipationNode::ResynchronizationAttempt()
     //VER! tema sortition aca...deberia correr esto por cuenta?
     if(FreshestBundle && FreshestBundle->votes.size())
     {
-        Broadcast(*FreshestBundle);
+        Broadcast((void*)(FreshestBundle), BUNDLE);
         if (FreshestBundle->votes[0].v != EMPTY_PROPOSAL_VALUE && CachedFullProposals[CurrentPeriodSlot].count(FreshestBundle->votes[0].v.d))
         {
             //la reconstruyo y refirmo, o la mando tal cual esta, o como hago? Conviene mas guardarme la pp que la proposal? ver
@@ -959,14 +999,6 @@ void ParticipationNode::ConfirmBlock(LedgerEntry& e)
      Ledger.Entries.push_back(e);
 }
 #endif
-
-
-
-
-void ParticipationNode::ReceiveTransaction(Transaction& txn)
-{
-    TransactionPool.push_back(txn);
-}
 
 
 bool ParticipationNode::VerifyVote(Vote& vt)

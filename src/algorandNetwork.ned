@@ -39,7 +39,7 @@ network AlgorandNetwork
 //	int partCount = 1600;
 //	int relCount = 160;
 	
-	int partCount = 500;
+	int partCount = 400;
 //	int relCount = 1;
 
     submodules:
