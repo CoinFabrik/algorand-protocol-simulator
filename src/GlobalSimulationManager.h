@@ -40,9 +40,6 @@ using namespace omnetpp;
 
 struct Relay
 {
-    //in this model, relay nodes act as connections in between participation nodes
-    //note that if there's no route between two nodes, they can't send messages to each other
-
     //acts as an address
     uint64_t RelayID;
 
@@ -50,20 +47,13 @@ struct Relay
     std::vector<int> RelayConnections;          //Relay node IDs in network list
     std::vector<int> ParticipationConnections;  //Participation node IDs in network list
 
-    //connection delays
-    struct ConnectionDelays
-    {
-        //if false, connection is down
-//        bool ConnectionStatus = true;
 
-        simtime_t InDelay;
-        simtime_t OutDelay;
+    //connection delay stuff
+    std::vector<simtime_t> Relay_InConnectionDelays;
+    std::vector<simtime_t> Relay_OutConnectionDelays;
 
-//        simtime_t InDelayVariance;
-//        simtime_t OutDelayVariance;
-    };
-    std::vector<ConnectionDelays> RelayConnectionDelays;
-    std::vector<ConnectionDelays> PartNodeConnectionDelays;
+    std::vector<simtime_t> PartNode_InConnectionDelays;
+    std::vector<simtime_t> PartNode_OutConnectionDelays;
 };
 
 
@@ -74,17 +64,12 @@ class NetworkDefinition
 public:
     bool InitializedNetwork;
 
-    std::vector<std::vector<int>> MatrixGraph;
-
     std::vector<Relay> RelayNodes;
-    std::vector<class ParticipationNode*> ParticipationNodes;
-
-
-    void LoadNetworkFromFile();
+    std::vector<ParticipationNode*> ParticipationNodes;
 
 
     NetworkDefinition(){}
-    void InitNetwork(int nRelayNodes, int nPartNodes);
+    void InitNetwork(int nPartNodes, int nRelayNodes, std::vector<std::vector<int>>& PartNodeConnections, std::vector<std::vector<int>>& RelayNodeConnections);
 
     void LoadPartNode(class ParticipationNode* PartNode, int PartNodeIndex, std::vector<int>& RelayConnections);
 };
@@ -96,7 +81,7 @@ class GlobalSimulationManager : public cSimpleModule{
 public:
     GlobalSimulationManager();
     virtual ~GlobalSimulationManager(){}
-    void initialize(){}
+    void initialize();
 
     //singleton instance
     static GlobalSimulationManager* SimManager;
@@ -108,9 +93,18 @@ public:
 
 
     //represents "canonical" data
-    Ledger FullLedger;
+    Ledger Ledger;
     std::unordered_map<Address, BalanceRecord> BalanceMap;
+    uint64_t TotalStakedAlgos;
 
+
+    //all accounts (online and offline)
+    std::vector<Address> AccountAddresses;
+
+
+    //txn helper stuff
+    uint64_t LastTxnID;
+    inline uint64_t GetNextTxnID(){return LastTxnID++;}
 
     //Network stuff
     NetworkDefinition Network;

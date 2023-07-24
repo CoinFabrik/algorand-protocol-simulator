@@ -39,7 +39,7 @@ Address FEE_SINK = 0;
 /**********************************************************************************/
 
 
-ParticipationNode::ParticipationNode() : round(1), period(0), step(0), lastConcludingStep(0) //, pinnedVote(0)
+ParticipationNode::ParticipationNode() : round(1), period(0), step(0), lastConcludingStep(0)
 {
     FastResyncEvent = new cMessage(nullptr, 253);
     TimeoutEvent = new cMessage(nullptr, 0);
@@ -47,6 +47,7 @@ ParticipationNode::ParticipationNode() : round(1), period(0), step(0), lastConcl
     FreshestBundle = nullptr;
     SigmaBundle = nullptr;
     MuValue = EMPTY_PROPOSAL_VALUE;
+    pinnedValue = EMPTY_PROPOSAL_VALUE;
 }
 
 
@@ -85,7 +86,7 @@ void ParticipationNode::initialize()
 
 void ParticipationNode::InitOnlineAccounts()
 {
-    for (int i = 0; i < uint64_t(TOTAL_ACCOUNTS); i++)
+    for (uint64_t i = 0; i < uint64_t(TOTAL_ACCOUNTS); i++)
     {
         auto NewAccount = Account(rand(), uint64_t(START_MONEY));
         onlineAccounts.push_back(NewAccount);
@@ -107,10 +108,8 @@ void ParticipationNode::UpdateBalances()
 
     if (!Ledger.Entries.size()) return;
 
-    uint64_t LookbackParam = 0;
     //get transactions from last addition to the ledger
     auto& LastBlock = *(Ledger.Entries.end()-1);
-    auto& LookbackBlock = *(Ledger.Entries.end()-(Ledger.Entries.size()>=LookbackParam?LookbackParam:0));
 
     //update all balances according to last block
     for (Transaction& txn : LastBlock.Txns)
@@ -121,20 +120,25 @@ void ParticipationNode::UpdateBalances()
 //        Balance[FEE_SINK_ADDRESS].RawBalance += txn.Fee;
     }
 
-    //updatear all cached balances according to lookback block
-    for (Transaction& txn : LookbackBlock.Txns)
+    if (Ledger.Entries.size()>BalanceLookback)
     {
-        //por ahora solo pay
-        GlobalSimulationManager::SimManager->BalanceMap[txn.Sender].OldBalance -= txn.Fee + txn.Amount;
-        GlobalSimulationManager::SimManager->BalanceMap[txn.Receiver].OldBalance += txn.Amount;
+        //updatear all cached balances according to lookback block
+        auto& LookbackBlock =  *(Ledger.Entries.end() - 1 - BalanceLookback);
+        for (Transaction& txn : LookbackBlock.Txns)
+        {
+            //por ahora solo pay
+            GlobalSimulationManager::SimManager->BalanceMap[txn.Sender].OldBalance -= txn.Fee + txn.Amount;
+            GlobalSimulationManager::SimManager->BalanceMap[txn.Receiver].OldBalance += txn.Amount;
+        }
     }
 }
 
 
 void ParticipationNode::SimulateTransactions()
 {
-    //for now, generate 10 random txns
-    for (int i = 0; i < 10; i++)
+    //for now, generate a random number of random txns (max 1 per managed account)
+    int nTxns = rand()%onlineAccounts.size();
+    for (int i = 0; i < nTxns; i++)
     {
         Transaction txn = GenerateRandomTransaction();
         Broadcast((void*)(&txn), TXN);
@@ -145,10 +149,12 @@ void ParticipationNode::SimulateTransactions()
 Transaction ParticipationNode::GenerateRandomTransaction()
 {
     Transaction txn;
-    //pick random txnID, increase global counter
-    //pick random sender
-    //pick random receiver
-    //pick random amount (amount <= sender balance)
+    txn.txnID = GlobalSimulationManager::SimManager->GetNextTxnID();
+    txn.type = Transaction::PAY;  //por ahora solo pay
+    //pick random sender (implementar lista de addresses...ninguna de las dos cuentas tiene por que estar online. Separar managed de online)
+    txn.Sender = onlineAccounts[rand()%onlineAccounts.size()].I;
+    txn.Receiver = onlineAccounts[rand()%onlineAccounts.size()].I;
+    txn.Amount = rand() % GlobalSimulationManager::SimManager->BalanceMap[txn.Sender].RawBalance;  //es el actual o el de 320 rounds prior? repasar eso
     return txn;
 }
 
@@ -181,9 +187,6 @@ void ParticipationNode::handleMessage(cMessage* msg)
             scheduleAfter(LambdaF + 0, FastResyncEvent);
 
             BlockProposal(e);
-
-            // //pin value? check on specs
-            // pinnedPayload.e = LocalBlock;
 
             lastConcludingStep = 0;
             step = 1;
@@ -238,21 +241,42 @@ void ParticipationNode::handleMessage(cMessage* msg)
 
         else if(msg->getKind() == 256)
         {
-            if (VoteQueue.empty())
+            if (!TravelingTxnQueue.empty())
             {
-                cancelAndDelete(msg);
-                return;
+                int sz = TravelingTxnQueue.size();
+                HandleTransaction(TravelingTxnQueue.back());
+                if (TravelingTxnQueue.size() == sz) TravelingTxnQueue.pop_back();
             }
-
-            EV << "------------- START " << VoteQueue.back().v.d << endl;
-
-            Vote vt = VoteQueue.back();
-            HandleVote(vt);
-            VoteQueue.pop_back();
-
-
-            EV << "------------- END " << endl;
-
+            cancelAndDelete(msg);
+        }
+        else if(msg->getKind() == 257)
+        {
+            if (!TravelingVoteQueue.empty())
+            {
+                int sz = TravelingVoteQueue.size();
+                HandleVote(TravelingVoteQueue.back());
+                if (TravelingVoteQueue.size() == sz) TravelingVoteQueue.pop_back();
+            }
+            cancelAndDelete(msg);
+        }
+        else if(msg->getKind() == 258)
+        {
+            if (!TravelingProposalQueue.empty())
+            {
+                int sz = TravelingProposalQueue.size();
+                HandleProposal(TravelingProposalQueue.back());
+                if (TravelingProposalQueue.size() == sz) TravelingProposalQueue.pop_back();
+            }
+            cancelAndDelete(msg);
+        }
+        else if(msg->getKind() == 259)
+        {
+            if (!TravelingBundleQueue.empty())
+            {
+                int sz = TravelingBundleQueue.size();
+                HandleBundle(TravelingBundleQueue.back());
+                if (TravelingBundleQueue.size() == sz) TravelingBundleQueue.pop_back();
+            }
             cancelAndDelete(msg);
         }
     }
@@ -265,13 +289,47 @@ void ParticipationNode::Broadcast(void* data, MsgType type)
 }
 
 
+void ParticipationNode::TEST_ScheduleTxnHandling(float delay, Transaction& txn)
+{
+    Enter_Method_Silent("TEST_ScheduleTxnHandling");
+
+    if (delay==0.f){HandleTransaction(txn); return;}
+
+    TravelingTxnQueue.push_back(txn);
+    scheduleAfter(delay, new cMessage(nullptr, 256));
+}
+
+
 void ParticipationNode::TEST_ScheduleVoteHandling(float delay, Vote& vt)
 {
     Enter_Method_Silent("TEST_ScheduleVoteHandling");
 
-    Vote aux(vt.I, vt.r, vt.p, vt.s, vt.v, vt.VRFOut, vt.weight);
-    VoteQueue.push_back(aux);
-    scheduleAfter(delay, new cMessage(nullptr, 256));
+    if (delay==0.f){HandleVote(vt); return;}
+
+    TravelingVoteQueue.push_back(vt);
+    scheduleAfter(delay, new cMessage(nullptr, 257));
+}
+
+
+void ParticipationNode::TEST_ScheduleProposalHandling(float delay, ProposalPayload& pp)
+{
+    Enter_Method_Silent("TEST_ScheduleproposalHandling");
+
+    if (delay==0.f){HandleProposal(pp); return;}
+
+    TravelingProposalQueue.push_back(pp);
+    scheduleAfter(delay, new cMessage(nullptr, 258));
+}
+
+
+void ParticipationNode::TEST_ScheduleBundleHandling(float delay, Bundle& b)
+{
+    Enter_Method_Silent("TEST_ScheduleBundleHandling");
+
+    if (delay==0.f){HandleBundle(b); return;}
+
+    TravelingBundleQueue.push_back(b);
+    scheduleAfter(delay, new cMessage(nullptr, 259));
 }
 
 
@@ -281,8 +339,13 @@ void ParticipationNode::HandleTransaction(Transaction& ReceivedTxn)
     Enter_Method_Silent("HandleTransaction");
 
     //TODO: validate?
-
-//    TransactionPool.push_back(ReceivedTxn);
+    if (TransactionPool.size() < TXN_POOL_LIMIT)
+        TransactionPool.push_back(ReceivedTxn);
+    else
+    {
+        //log transaction dropping event
+//        EV << "TXN ID: " << ReceivedTxn.txnID << " DROPPED BY " << getIndex() << endl;
+    }
 }
 
 
@@ -393,7 +456,13 @@ void ParticipationNode::HandleVote(Vote& ReceivedVote)
         else if (ReceivedVote.s == 2)
         {
             //if it was a certification vote, I just completed a cert bundle
-            ConfirmBlock(ReceivedVote.v.d);
+//            ConfirmBlock(ReceivedVote.v.d);
+            if (CachedFullProposals[CurrentPeriodSlot].count(ReceivedVote.v.d))
+                ConfirmBlock(CachedFullProposals[CurrentPeriodSlot][ReceivedVote.v.d]);
+            else
+            {
+                EV << "ACA NO TENGO LA PROPUESTA. TENGO QUE HACER ALGO" << endl;
+            }
 
             //TESTING
             UpdateBalances();
@@ -401,7 +470,7 @@ void ParticipationNode::HandleVote(Vote& ReceivedVote)
             GarbageCollectStateForNewRound();
             StartNewRound();
 
-            EV << "COMPLETED ROUND: " << round-1 << ", BY COMMITING BLOCK WITH HASH: " << ReceivedVote.v.d << endl;
+//            EV << "COMPLETED ROUND: " << round-1 << ", BY COMMITING BLOCK WITH HASH: " << ReceivedVote.v.d << endl;
         }
         else
         {
@@ -414,7 +483,7 @@ void ParticipationNode::HandleVote(Vote& ReceivedVote)
             GarbageCollectStateForNewPeriod(ReceivedVote.p+1);
             StartNewPeriod(ReceivedVote.p);
 
-            EV << "STARTED NEW PERIOD: " << period-1 << ", WITH PINNED VALUE: " << ReceivedVote.v.d << endl;
+//            EV << "STARTED NEW PERIOD: " << period-1 << ", WITH PINNED VALUE: " << ReceivedVote.v.d << endl;
         }
     }
 }
@@ -428,7 +497,7 @@ void ParticipationNode::HandleProposal(ProposalPayload& ReceivedPP)
     if (CachedFullProposals[CurrentPeriodSlot].count(ReceivedPP.Cached.d))
         return;
 
-    P.push_back(ReceivedPP);
+//    P.push_back(ReceivedPP);
     CachedFullProposals[CurrentPeriodSlot][ReceivedPP.Cached.d] = ReceivedPP.e;
 }
 
@@ -436,6 +505,7 @@ void ParticipationNode::HandleProposal(ProposalPayload& ReceivedPP)
 void ParticipationNode::HandleBundle(Bundle& ReceivedBundle)
 {
     //TODO: validate bundle
+
     if (!VerifyBundle(ReceivedBundle) || ReceivedBundle.votes[0].r != round || ReceivedBundle.votes[0].p+1 < period)
         return;
 
@@ -448,9 +518,6 @@ void ParticipationNode::HandleBundle(Bundle& ReceivedBundle)
 
 void ParticipationNode::GarbageCollectStateForNewRound()
 {
-//    EV << "SZ " << VoteQueue.size() << endl;
-    VoteQueue.clear();
-
     cancelEvent(TimeoutEvent);
     cancelEvent(FastResyncEvent);
     
@@ -470,7 +537,7 @@ void ParticipationNode::GarbageCollectStateForNewRound()
     for (int i = 0; i < 3; i++) FastRecoveryVotes[i].clear();
 
     ProposalVotes.clear();
-    P.clear();
+//    P.clear();
     for (int i = 0; i < 3; i++) CachedFullProposals[i].clear();
 
     for (int i = 0; i < 256; i++)
@@ -487,7 +554,7 @@ void ParticipationNode::GarbageCollectStateForNewPeriod(uint64_t NewPeriod)
     cancelEvent(FastResyncEvent);
 
     ProposalVotes.clear();
-    P.clear();
+//    P.clear();
 
     //extra stuff to re-initialize
     SigmaBundle = nullptr;
@@ -966,7 +1033,7 @@ uint64_t ParticipationNode::TotalStakedAlgos()
 LedgerEntry ParticipationNode::BlockAssembly()
 {
     LedgerEntry e;
-    e.Txns.swap(TransactionPool);
+//    e.Txns.swap(TransactionPool);
 
     return e;
 }
@@ -987,7 +1054,9 @@ LedgerEntry ParticipationNode::BlockAssembly()
     auto e = LedgerEntry();
     auto n_tp = TransactionPool.size();
 
-    std::move(TransactionPool.rbegin()+(n_tp>10?10:n_tp), TransactionPool.rbegin(), e.Txns.begin());
+    auto n_block = 1000;
+
+    std::copy(TransactionPool.rbegin()+(n_tp > n_block? n_block : n_tp), TransactionPool.rbegin(), e.Txns.rend());
 
     return LedgerEntry();
 }
@@ -995,8 +1064,14 @@ LedgerEntry ParticipationNode::BlockAssembly()
 
 void ParticipationNode::ConfirmBlock(LedgerEntry& e)
 {
-     //TODO: agregar bloques de verdad
      Ledger.Entries.push_back(e);
+
+     for (auto& txn : e.Txns)
+     {
+         std::vector<Transaction>::iterator it = std::find(TransactionPool.begin(), TransactionPool.end(), txn);
+         if (it != TransactionPool.end())
+             TransactionPool.erase(it);
+     }
 }
 #endif
 

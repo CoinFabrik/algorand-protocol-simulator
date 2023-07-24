@@ -14,7 +14,7 @@ typedef boost::multiprecision::cpp_int BigInt;
 typedef boost::multiprecision::number<boost::multiprecision::cpp_bin_float<156>> BigFloat; //2**(64*8) has 155 decimal digits
 
 
-typedef uint256_t Address;
+typedef uint64_t Address;
 
 
 class BalanceRecord
@@ -44,9 +44,12 @@ class Transaction
 public:
     Transaction(){}
 
-    uint256_t txnID;
-    //txnType type;  //por ahora, solo pay
+    uint64_t txnID;
 
+    enum TxnTypeEnum{PAY, KEY_REG, KEY_DEREG};
+    TxnTypeEnum type;
+
+    //indexes into the global account list (avoid destroying/copying many 256 bit integers). These are only accessed a couple times in a round
     Address Sender;
     Address Receiver;
 
@@ -54,6 +57,12 @@ public:
 
     //VER TEMA FEES
     uint64_t Fee;
+
+
+    bool operator==(const Transaction& txn) const
+    {
+        return txnID == txn.txnID;
+    }
 };
 
 

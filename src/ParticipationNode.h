@@ -18,14 +18,16 @@
 
 #define SIMULATE_VRF 1
 #define GLOBAL_BALANCE_TRACKER 1
-#define SIMPLIFIED_BLOCKS 1
+#define SIMPLIFIED_BLOCKS 0
 #define KEEP_GLOBAL_LEDGER 1
 
-
+//parameter defines
 #define TOTAL_NODES 400
 #define RELAYS 100
 #define START_MONEY 1000000
 #define TOTAL_ACCOUNTS 10
+#define TXN_POOL_LIMIT 1000
+#define PARTNODE_LEDGER_CACHE 1000
 
 //logging defines
 #define LOG_STEP_EVENTS 1
@@ -44,7 +46,6 @@
 #include <algorithm>
 #include <random>
 #include <unordered_map>
-#include <map>
 
 //sodium library includes
 #include <sodium.h>
@@ -112,7 +113,7 @@ public:
 
 
     //observed proposals set
-    std::vector<ProposalPayload> P;
+//    std::vector<ProposalPayload> P;
 
     //multi-purpose boradcasting function
     void Broadcast(void* data, MsgType type);
@@ -137,7 +138,11 @@ public:
     void SoftVote();
     uint256_t ComputeLowestCredValue(VRFOutput& Credential, uint64_t weight);
 
+#if SIMPLIFIED_BLOCKS
     void ConfirmBlock(uint256_t fakeEntry);
+#else
+    void ConfirmBlock(LedgerEntry& e);
+#endif
 
     void NextVote();
     void FastRecovery();
@@ -166,7 +171,7 @@ public:
     uint8_t CurrentPeriodSlot = 0;
     //address to vote map, per step. A maximum of two votes are permitted (one equivocation)
     //at most I keep 3 periods at all times (one forward, one curent, one backward)
-    std::map<Address, Vote[2]> AddressToVoteMap[256][3];
+    std::unordered_map<Address, Vote[2]> AddressToVoteMap[256][3];
 //    //Equivocation vote handling stuff
 //    struct EquivocationData
 //    {
@@ -192,8 +197,15 @@ public:
     void HandleBundle(Bundle& ReceivedBundle);
 
 
+    void TEST_ScheduleTxnHandling(float delay, Transaction& txn);
     void TEST_ScheduleVoteHandling(float delay, Vote& vt);
-    std::vector<Vote> VoteQueue;
+    void TEST_ScheduleProposalHandling(float delay, ProposalPayload& pp);
+    void TEST_ScheduleBundleHandling(float delay, Bundle& b);
+
+    std::vector<Transaction> TravelingTxnQueue;
+    std::vector<Vote> TravelingVoteQueue;
+    std::vector<ProposalPayload> TravelingProposalQueue;
+    std::vector<Bundle> TravelingBundleQueue;
 
 
 
@@ -217,7 +229,7 @@ public:
 
 
     //transaction pool stuff
-    std::vector<Transaction> TransactionPool;
+    std::vector<Transaction> TransactionPool;  //limit to 75000? txHandler_test.go
     void SimulateTransactions();
     Transaction GenerateRandomTransaction();
 

@@ -1,0 +1,1 @@
+C:\Users\argic\Desktop\omnetpp-6.0.1-windows-x86_64\omnetpp-6.0.1\mingwenv.cmd -lc "cd ../../Nuevacarpeta/Simulator/algorandprotocolsimulator/src && bash run_alt"
