@@ -29,14 +29,14 @@ GlobalSimulationManager::GlobalSimulationManager()
         SimManager = this;
         Network.InitializedNetwork = false;
         LastTxnID = 0;
-
-        StartTime = std::chrono::high_resolution_clock::now();
     }
 }
 
 
 void GlobalSimulationManager::initialize()
 {
+    StartTime = std::chrono::high_resolution_clock::now();
+
     std::string net("../test_network.nf"), pl;
     LoadContextFromFiles(net, pl);
 }
@@ -153,32 +153,36 @@ void GlobalSimulationManager::PropagateMessageThroughNetwork(std::vector<int>& P
             }
     }
 
-
     while(!PendingPartNodes.empty())
     {
         int PartNodeID = PendingPartNodes.back();
         PendingPartNodes.pop_back();
 
+        float FinalDelay = 0.f;
         switch(type)
         {
             case TXN:
+                FinalDelay = DATASIZE_DELAY_MULTIPLIER_TXN * 0.f + COMPUTATION_DELAY_DELTA_TXN_HANDLER;
 //                Network.ParticipationNodes[PartNodeID]->HandleTransaction(*(Transaction*)(msg));
-                Network.ParticipationNodes[PartNodeID]->TEST_ScheduleTxnHandling(0.f, *(Transaction*)(msg));
+                Network.ParticipationNodes[PartNodeID]->TEST_ScheduleTxnHandling(FinalDelay, *(Transaction*)(msg));
                 break;
 
             case PROPOSAL:
+                FinalDelay = DATASIZE_DELAY_MULTIPLIER_PROPOSAL * 0.5f + COMPUTATION_DELAY_DELTA_PROPOSAL_HANDLER;
 //                Network.ParticipationNodes[PartNodeID]->HandleProposal(*(ProposalPayload*)(msg));
-                Network.ParticipationNodes[PartNodeID]->TEST_ScheduleProposalHandling(0.5f, *(ProposalPayload*)(msg));
+                Network.ParticipationNodes[PartNodeID]->TEST_ScheduleProposalHandling(FinalDelay, *(ProposalPayload*)(msg));
                 break;
 
             case VOTE:
+                FinalDelay = DATASIZE_DELAY_MULTIPLIER_VOTE * 0.5f + COMPUTATION_DELAY_DELTA_VOTE_HANDLER;
 //                Network.ParticipationNodes[PartNodeID]->HandleVote(*(Vote*)(msg));
-                Network.ParticipationNodes[PartNodeID]->TEST_ScheduleVoteHandling(0.f, *(Vote*)(msg));
+                Network.ParticipationNodes[PartNodeID]->TEST_ScheduleVoteHandling(FinalDelay, *(Vote*)(msg));
                 break;
 
             case BUNDLE:
+                FinalDelay = DATASIZE_DELAY_MULTIPLIER_BUNDLE * 0.f + COMPUTATION_DELAY_DELTA_BUNDLE_HANDLER;
 //                Network.ParticipationNodes[PartNodeID]->HandleBundle(*(Bundle*)(msg));
-                Network.ParticipationNodes[PartNodeID]->TEST_ScheduleBundleHandling(0.f, *(Bundle*)(msg));
+                Network.ParticipationNodes[PartNodeID]->TEST_ScheduleBundleHandling(FinalDelay, *(Bundle*)(msg));
                 break;
 
             default:
@@ -216,6 +220,11 @@ void GlobalSimulationManager::LoadContextFromFiles(std::string& NetworkDef_filen
 
     std::getline(s, strN, ' ');
     int nRelayNodes = std::stoi(strN);
+
+
+
+    //TODO: LEVANTAR DELAYS Y PONERLOS DONDE CORRESPONDE
+
 
 
 //    //get all partnode to relay connections (opt: with in delay and out delay)
