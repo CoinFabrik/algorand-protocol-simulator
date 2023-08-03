@@ -62,6 +62,9 @@ struct Relay
 
     std::vector<simtime_t> PartNode_InConnectionDelays;
     std::vector<simtime_t> PartNode_OutConnectionDelays;
+
+
+    bool RelayHasCustomCode = false;
 };
 
 
@@ -95,6 +98,14 @@ public:
     static GlobalSimulationManager* SimManager;
 
 
+    //simulation parameter constants
+    uint64_t NumberOfPartNodes;
+    uint64_t NumberOfRelayNodes;
+    uint64_t NumberOfAccounts;
+    uint64_t NumberOfOnlineAccounts;
+    uint64_t TotalBalance;
+
+
     //chronological time measuring
     std::chrono::time_point<std::chrono::high_resolution_clock> StartTime;
     std::chrono::duration<double> GetCurrentChronoTime(){return std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - StartTime); }
@@ -107,7 +118,7 @@ public:
 
 
     //all accounts (online and offline)
-    std::vector<Address> AccountAddresses;
+//    std::vector<Address> AccountAddresses;
 
 
     //txn helper stuff
@@ -122,10 +133,32 @@ public:
 
 
     //scenario load and run data and functions
-    void LoadContextFromFiles(std::string& NetworkDef_filename, std::string& CF_filename);
+    void LoadContextFromFiles(std::string& NetworkDef_filename, std::string& BalanceDef_filename, std::string& CF_filename);
     void LoadEventsFromEF(std::string& filename);
 
-    //std::vector<class SimulationEvent*> SimEventQueue;
+    void AddAccountRecord(uint64_t address, uint64_t balance, bool status, std::vector<int>& patnodes);
+
+
+    //simulation events to be executed
+    std::vector<class SimulationEvent*> SimEventQueue;
+
+
+    //how many nodes are running round n
+    std::unordered_map<uint64_t, uint64_t> NodesInRound;
+
+
+    //cached observed structures (improves memory allocation)
+    std::vector<Transaction*> LivingCirculatingTxns;
+
+//    std::unordered_map<uint64_t, std::vector<Vote>> ObservedCirculatingVotes;
+//    std::vector<ProposalPayload> ObservedCirclatingProposalPayloads;
+//    std::vector<Bundle> ObservedCirculatingBundles;
+
+
+    //Global view of the ledger
+    uint64_t CurrentGlobalRound;
+   struct Ledger GlobalLedger;
+    void NodeStartedNewRound(ParticipationNode* caller, uint64_t RoundStarted);
 };
 
 

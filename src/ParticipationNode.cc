@@ -39,6 +39,9 @@ Address FEE_SINK = 0;
 /**********************************************************************************/
 
 
+int ParticipationNode::MaxNodeID = 0;
+
+
 ParticipationNode::ParticipationNode() : round(1), period(0), step(0), lastConcludingStep(0)
 {
     FastResyncEvent = new cMessage(nullptr, 253);
@@ -48,6 +51,8 @@ ParticipationNode::ParticipationNode() : round(1), period(0), step(0), lastConcl
     SigmaBundle = nullptr;
     MuValue = EMPTY_PROPOSAL_VALUE;
     pinnedValue = EMPTY_PROPOSAL_VALUE;
+
+//    GlobalSimulationManager::SimManager->Network.ParticipationNodes[NodeID] = this;
 }
 
 
@@ -86,14 +91,20 @@ void ParticipationNode::initialize()
 
 void ParticipationNode::InitOnlineAccounts()
 {
-    for (uint64_t i = 0; i < uint64_t(TOTAL_ACCOUNTS); i++)
+    for (int i = getIndex()*10; i < (getIndex()+1)*10; i++)
     {
-        auto NewAccount = Account(rand(), uint64_t(START_MONEY));
+        auto addr = i;
+        auto NewAccount = Account(addr, GlobalSimulationManager::SimManager->BalanceMap[addr].RawBalance);
         onlineAccounts.push_back(NewAccount);
-
-        //initialize global balance tracker
-        GlobalSimulationManager::SimManager->BalanceMap[NewAccount.I] =  BalanceRecord(NewAccount.Money, true);
     }
+//    for (uint64_t i = 0; i < uint64_t(TOTAL_ACCOUNTS); i++)
+//    {
+//        auto NewAccount = Account(rand(), uint64_t(START_MONEY));
+//        onlineAccounts.push_back(NewAccount);
+//
+//        //initialize global balance tracker
+//        GlobalSimulationManager::SimManager->BalanceMap[NewAccount.I] =  BalanceRecord(NewAccount.Money, true);
+//    }
 }
 
 
@@ -112,11 +123,11 @@ void ParticipationNode::UpdateBalances()
     auto& LastBlock = *(Ledger.Entries.end()-1);
 
     //update all balances according to last block
-    for (Transaction& txn : LastBlock.Txns)
+    for (Transaction* txn : LastBlock.Txns)
     {
         //por ahora solo pay
-        GlobalSimulationManager::SimManager->BalanceMap[txn.Sender].RawBalance -= txn.Fee + txn.Amount;
-        GlobalSimulationManager::SimManager->BalanceMap[txn.Receiver].RawBalance += txn.Amount;
+        GlobalSimulationManager::SimManager->BalanceMap[txn->Sender].RawBalance -= txn->Fee + txn->Amount;
+        GlobalSimulationManager::SimManager->BalanceMap[txn->Receiver].RawBalance += txn->Amount;
 //        Balance[FEE_SINK_ADDRESS].RawBalance += txn.Fee;
     }
 
@@ -124,11 +135,11 @@ void ParticipationNode::UpdateBalances()
     {
         //updatear all cached balances according to lookback block
         auto& LookbackBlock =  *(Ledger.Entries.end() - 1 - BalanceLookback);
-        for (Transaction& txn : LookbackBlock.Txns)
+        for (Transaction* txn : LookbackBlock.Txns)
         {
             //por ahora solo pay
-            GlobalSimulationManager::SimManager->BalanceMap[txn.Sender].OldBalance -= txn.Fee + txn.Amount;
-            GlobalSimulationManager::SimManager->BalanceMap[txn.Receiver].OldBalance += txn.Amount;
+            GlobalSimulationManager::SimManager->BalanceMap[txn->Sender].OldBalance -= txn->Fee + txn->Amount;
+            GlobalSimulationManager::SimManager->BalanceMap[txn->Receiver].OldBalance += txn->Amount;
         }
     }
 }
@@ -137,7 +148,7 @@ void ParticipationNode::UpdateBalances()
 void ParticipationNode::SimulateTransactions()
 {
     //for now, generate a random number of random txns (max 1 per managed account)
-    int nTxns = rand()%onlineAccounts.size();
+    int nTxns = rand()%2; //onlineAccounts.size();
     for (int i = 0; i < nTxns; i++)
     {
         Transaction txn = GenerateRandomTransaction();
@@ -289,7 +300,7 @@ void ParticipationNode::Broadcast(void* data, MsgType type)
 }
 
 
-void ParticipationNode::TEST_ScheduleTxnHandling(float delay, Transaction& txn)
+void ParticipationNode::TEST_ScheduleTxnHandling(float delay, Transaction* txn)
 {
     Enter_Method_Silent("TEST_ScheduleTxnHandling");
 
@@ -333,7 +344,7 @@ void ParticipationNode::TEST_ScheduleBundleHandling(float delay, Bundle& b)
 }
 
 
-void ParticipationNode::HandleTransaction(Transaction& ReceivedTxn)
+void ParticipationNode::HandleTransaction(Transaction* ReceivedTxn)
 {
     //macro for methods called directly from foreign nodes (direct memory write optimization)
     Enter_Method_Silent("HandleTransaction");
@@ -602,6 +613,8 @@ void ParticipationNode::StartNewRound()
 
     TimeoutEvent->setKind(0);
     scheduleAfter(0, TimeoutEvent);
+
+    GlobalSimulationManager::SimManager->NodeStartedNewRound(this, round);
 }
 
 
@@ -1025,7 +1038,8 @@ void ParticipationNode::ResynchronizationAttempt()
 
 uint64_t ParticipationNode::TotalStakedAlgos()
 {
-     return uint64_t(TOTAL_NODES) * uint64_t(START_MONEY) * uint64_t(TOTAL_ACCOUNTS);
+    return GlobalSimulationManager::SimManager->TotalStakedAlgos;
+//    return uint64_t(TOTAL_NODES) * uint64_t(START_MONEY) * uint64_t(TOTAL_ACCOUNTS);
 }
 
 
@@ -1056,7 +1070,11 @@ LedgerEntry ParticipationNode::BlockAssembly()
 
     auto n_block = 1000;
 
-    std::copy(TransactionPool.rbegin()+(n_tp > n_block? n_block : n_tp), TransactionPool.rbegin(), e.Txns.rend());
+    for (int i = n_tp-1; i > n_tp - n_block && i>=0; i--)
+    {
+        e.Txns.push_back(TransactionPool[i]);
+    }
+//    std::copy(TransactionPool.rbegin()+(n_tp > n_block? n_block : n_tp), TransactionPool.rbegin(), e.Txns.rend());
 
     return LedgerEntry();
 }
@@ -1066,9 +1084,11 @@ void ParticipationNode::ConfirmBlock(LedgerEntry& e)
 {
      Ledger.Entries.push_back(e);
 
-     for (auto& txn : e.Txns)
+     for (Transaction* txn : e.Txns)
      {
-         std::vector<Transaction>::iterator it = std::find(TransactionPool.begin(), TransactionPool.end(), txn);
+         auto ptrEq = [txn](Transaction* t1) { return txn == t1; };
+
+         std::vector<Transaction*>::iterator it = std::find_if(TransactionPool.begin(), TransactionPool.end(), ptrEq);
          if (it != TransactionPool.end())
              TransactionPool.erase(it);
      }

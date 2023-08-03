@@ -21,11 +21,6 @@ simple ParticipationNode
         inout gate[];
 }
 
-simple RelayNode
-{
-    gates:
-        inout gate[];
-}
 
 simple GlobalSimulationManager
 {
@@ -34,18 +29,11 @@ simple GlobalSimulationManager
 
 network AlgorandNetwork
 {
-    @display("bgb=806,486");
-
-//	int partCount = 1600;
-//	int relCount = 160;
-	
 	int partCount = 400;
-//	int relCount = 1;
-
+	
     submodules:
         Manager : GlobalSimulationManager;
         PartNode[partCount]: ParticipationNode;
-//        RelayNode[relCount]: RelayNode;
         
     connections:
 //        for i=0..partCount-1, for j=0..relCount-1

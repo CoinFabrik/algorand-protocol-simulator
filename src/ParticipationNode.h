@@ -69,6 +69,9 @@ using namespace omnetpp;
 class ParticipationNode: public cSimpleModule
 {
 public:
+    static int MaxNodeID;
+    int NodeID;
+    int GetNodeID();
 
     //random 256 bit number generator
     boost::random::independent_bits_engine<boost::random::mt19937, 256, uint256_t> generator;
@@ -191,18 +194,18 @@ public:
 //    uint64_t CombinedEquivocationWeight[2][255];
 
     //message reception handlers
-    void HandleTransaction(Transaction& ReceivedTxn);
+    void HandleTransaction(Transaction* ReceivedTxn);
     void HandleVote(Vote& ReceivedVote);
     void HandleProposal(ProposalPayload& ReceivedPP);
     void HandleBundle(Bundle& ReceivedBundle);
 
 
-    void TEST_ScheduleTxnHandling(float delay, Transaction& txn);
+    void TEST_ScheduleTxnHandling(float delay, Transaction* txn);
     void TEST_ScheduleVoteHandling(float delay, Vote& vt);
     void TEST_ScheduleProposalHandling(float delay, ProposalPayload& pp);
     void TEST_ScheduleBundleHandling(float delay, Bundle& b);
 
-    std::vector<Transaction> TravelingTxnQueue;
+    std::vector<Transaction*> TravelingTxnQueue;
     std::vector<Vote> TravelingVoteQueue;
     std::vector<ProposalPayload> TravelingProposalQueue;
     std::vector<Bundle> TravelingBundleQueue;
@@ -229,7 +232,7 @@ public:
 
 
     //transaction pool stuff
-    std::vector<Transaction> TransactionPool;  //limit to 75000? txHandler_test.go
+    std::vector<Transaction*> TransactionPool;  //limit to 75000? txHandler_test.go
     void SimulateTransactions();
     Transaction GenerateRandomTransaction();
 

@@ -38,7 +38,6 @@ public:
 
 //transaction stuff
 //work in progress
-//enum txnType {};
 class Transaction
 {
 public:
@@ -49,7 +48,6 @@ public:
     enum TxnTypeEnum{PAY, KEY_REG, KEY_DEREG};
     TxnTypeEnum type;
 
-    //indexes into the global account list (avoid destroying/copying many 256 bit integers). These are only accessed a couple times in a round
     Address Sender;
     Address Receiver;
 
@@ -57,6 +55,10 @@ public:
 
     //VER TEMA FEES
     uint64_t Fee;
+
+
+    uint64_t ValidFromRound;
+    uint64_t ValidUntilRound;
 
 
     bool operator==(const Transaction& txn) const
@@ -150,7 +152,7 @@ struct LedgerEntry
     stSeedAndProof SeedAndProof;
 
     //body
-    std::vector<Transaction> Txns;
+    std::vector<Transaction*> Txns;
 
     VRFOutput ProposerCredentials;
     Address ProposerAddress;

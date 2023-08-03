@@ -37,8 +37,8 @@ void GlobalSimulationManager::initialize()
 {
     StartTime = std::chrono::high_resolution_clock::now();
 
-    std::string net("../test_network.nf"), pl;
-    LoadContextFromFiles(net, pl);
+    std::string net("../test_network.nf"), bal("../test_balance.bf"), pl;
+    LoadContextFromFiles(net, bal, pl);
 }
 
 
@@ -124,11 +124,12 @@ void GlobalSimulationManager::PropagateMessageThroughNetwork(std::vector<int>& P
     std::deque<int> PendingRelayNodes(PendingRelayNodeVector.begin(), PendingRelayNodeVector.end());
     std::deque<int> PendingPartNodes;
 
+
     std::deque<float> PendingPartNodeConnectionDelay;
     std::deque<float> PendingRelayNodeConnectionDelay;
+    std::deque<float> AccumRelayDelay;
 
 
-    float AcumRelayDelay = 0.f;
     while(!PendingRelayNodes.empty())
     {
         int ProcessingRelayID = PendingRelayNodes.back();
@@ -164,7 +165,12 @@ void GlobalSimulationManager::PropagateMessageThroughNetwork(std::vector<int>& P
             case TXN:
                 FinalDelay = DATASIZE_DELAY_MULTIPLIER_TXN * 0.f + COMPUTATION_DELAY_DELTA_TXN_HANDLER;
 //                Network.ParticipationNodes[PartNodeID]->HandleTransaction(*(Transaction*)(msg));
-                Network.ParticipationNodes[PartNodeID]->TEST_ScheduleTxnHandling(FinalDelay, *(Transaction*)(msg));
+
+
+                LivingCirculatingTxns.push_back(new Transaction(*(Transaction*)(msg)));
+
+
+                Network.ParticipationNodes[PartNodeID]->TEST_ScheduleTxnHandling(FinalDelay, (Transaction*)(msg));
                 break;
 
             case PROPOSAL:
@@ -192,7 +198,7 @@ void GlobalSimulationManager::PropagateMessageThroughNetwork(std::vector<int>& P
 }
 
 
-void GlobalSimulationManager::LoadContextFromFiles(std::string& NetworkDef_filename, std::string& CF_filename)
+void GlobalSimulationManager::LoadContextFromFiles(std::string& NetworkDef_filename, std::string& BalanceDef_filename, std::string& CF_filename)
 {
     //file pointer
     std::fstream fin;
@@ -242,7 +248,7 @@ void GlobalSimulationManager::LoadContextFromFiles(std::string& NetworkDef_filen
 //    }
 //
 //
-//    fin.close();
+    fin.close();
 //
 //    //get all relay to relay connections (with in delay and out delay)
 //    //TODO
@@ -267,4 +273,92 @@ void GlobalSimulationManager::LoadContextFromFiles(std::string& NetworkDef_filen
 
     std::vector<std::vector<int>> connections;
     Network.InitNetwork(nPartNodes, nRelayNodes, connections, connections);
+
+
+
+
+    //Balance file init
+    fin.open(BalanceDef_filename, std::ios::in);
+    if (!fin.is_open())
+    {
+        EV << "Unable to open balance definition file..." << endl;
+        //finalize simulation with error code
+        return;
+    }
+
+//    std::getline(fin, firstLine);
+//
+//    std::stringstream b(firstLine);
+//    std::getline(b, strN, ' ');
+//    uint64_t TotalBalance = std::stoi(strN);
+//
+//    std::getline(b, strN, ' ');
+//    uint64_t TotalOnlineBalance = std::stoi(strN);
+
+    while(std::getline(fin, firstLine))
+    {
+        std::stringstream t(firstLine);
+        std::getline(t, strN, ' ');
+        uint64_t AccountAddress = std::stoi(strN);
+
+        std::getline(t, strN, ' ');
+        uint64_t AccountBalance = std::stoi(strN);
+
+        std::getline(t, strN, ' ');
+        bool AccountStatus = std::stoi(strN);
+
+        std::vector<int> PartNodes;
+        while(std::getline(t, strN, ' '))
+            PartNodes.push_back(std::stoi(strN));
+
+        AddAccountRecord(AccountAddress, AccountBalance, AccountStatus, PartNodes);
+
+//        EV << "BLN " << Network.ParticipationNodes[PartNodes[0]]->getIndex() << endl;
+    }
+
+    fin.close();
+}
+
+
+void GlobalSimulationManager::AddAccountRecord(uint64_t address, uint64_t balance, bool status, std::vector<int>& partnodes)
+{
+    NumberOfAccounts++;
+
+    BalanceMap[address] = BalanceRecord(balance, status);
+    TotalBalance += balance;
+
+    if (status)
+    {
+        TotalStakedAlgos += balance;
+        NumberOfOnlineAccounts++;
+    }
+
+//    for (int& id : partnodes)
+//    {
+//        Network.ParticipationNodes[id]->onlineAccounts.push_back(Account(address, balance));
+//    }
+}
+
+
+void GlobalSimulationManager::NodeStartedNewRound(ParticipationNode* caller, uint64_t RoundStarted)
+{
+//    EV << "NSNR "<< LivingCirculatingTxns.size() << endl;
+
+    NodesInRound[RoundStarted-1]--;
+    if (NodesInRound[RoundStarted-1] == 0)
+    {
+        //cleanup
+//        for (Transaction* txn: LivingCirculatingTxns)
+//
+    }
+
+
+    NodesInRound[RoundStarted]++;
+    if (NodesInRound[RoundStarted] > NumberOfPartNodes/2)
+    {
+        CurrentGlobalRound = RoundStarted;
+        GlobalLedger.Entries.push_back(*(caller->Ledger.Entries.end()-1));
+
+//        std::fid
+    }
 }
