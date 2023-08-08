@@ -1,4 +1,40 @@
+import { useState } from 'react'
+
 function InputData (): JSX.Element {
+    // Get input data
+    const [data, setData] = useState({
+        relayNodes: 0,
+        participationNodes: 0,
+        relayConnectionDelay: 0,
+        connectionDensity: 0,
+        numberOfAccounts: 0,
+        totalSupplyOfAlgos: 0,
+        balanceInAlgos: 0,
+        accountsPerNode: 0,
+        onlineAccounts: 0,
+        commiteesValues: 0,
+        seedLookback: 0,
+        seedRefreshInterval: 0,
+        balanceLookback: 0,
+        lambda: 0,
+        lambda1: 0,
+        lambda2: 0,
+        omega: 0,
+        finalizingCondition: 0,
+        transactionPoolLimit: 0,
+        ledgerCache: 0,
+        simulateVRF: 0,
+    })
+
+    // Handle input data
+    const handleData = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setData({
+            ...data,
+            [e.target.name]: e.target.value
+        })
+    }
+
+
   return (
     <div>
         <h1 className="text-center font-bold text-4xl mt-5">Algorand Blockchain Simulator</h1>
