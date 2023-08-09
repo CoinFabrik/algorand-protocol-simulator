@@ -32,8 +32,8 @@ function InputData (): JSX.Element {
             ...data,
             [e.target.name]: e.target.value
         })
+        console.log(data)
     }
-
 
   return (
     <div>
@@ -46,25 +46,33 @@ function InputData (): JSX.Element {
                 <input
                     className="ml-16 text-center pl-2 p-1 w-2/3 border-2 border-slate-300 rounded-xl"
                     type='number'
-                    placeholder='7893'
+                    placeholder='7893' 
+                    onChange={handleData}
+                    name='relayNodes'
                 />
                 <h3 className="text-center text-medium mt-5 mb-1">Participation nodes</h3>
                 <input
                     className="ml-16 text-center pl-2 p-1 w-2/3 border-2 border-slate-300 rounded-xl"
                     type='number'
                     placeholder='1456'
+                    onChange={handleData}
+                    name='participationNodes'
                 />
                 <h3 className="text-center text-medium mt-5 mb-1">Relay connection Delay (ms)</h3>
                 <input
                     className="ml-16 text-center pl-2 p-1 w-2/3 border-2 border-slate-300 rounded-xl"
                     type='number'
                     placeholder='20'
+                    onChange={handleData}
+                    name='relayConnectionDelay'
                 />
                 <h3 className="text-center text-medium mt-5 mb-1">Conection Density (%)</h3>
                 <input
                     className="ml-16 text-center pl-2 p-1 w-2/3 border-2 border-slate-300 rounded-xl"
                     type='number'
                     placeholder='48'
+                    onChange={handleData}
+                    name='connectionDensity'
                 />
             </div>
             <div className="w-1/4">
@@ -74,30 +82,40 @@ function InputData (): JSX.Element {
                     className="ml-16 text-center pl-2 p-1 w-2/3 border-2 border-slate-300 rounded-xl"
                     type='number'
                     placeholder='159734'
+                    onChange={handleData}
+                    name='numberOfAccounts'
                 />
                 <h3 className="text-center text-medium mt-5 mb-1">Total supply of Algos</h3>
                 <input
                     className="ml-16 text-center pl-2 p-1 w-2/3 border-2 border-slate-300 rounded-xl"
                     type='number'
                     placeholder='201201201'
+                    onChange={handleData}
+                    name='totalSupplyOfAlgos'
                 />
                 <h3 className="text-center text-medium mt-5 mb-1">Balance in Algos</h3>
                 <input
                     className="ml-16 text-center pl-2 p-1 w-2/3 border-2 border-slate-300 rounded-xl"
                     type='number'
                     placeholder='1456'
+                    onChange={handleData}
+                    name='balanceInAlgos'
                 />
                 <h3 className="text-center text-medium mt-5 mb-1">Accounts per node</h3>
                 <input
                     className="ml-16 text-center pl-2 p-1 w-2/3 border-2 border-slate-300 rounded-xl"
                     type='number'
                     placeholder='10'
+                    onChange={handleData}
+                    name='accountsPerNode'
                 />
                 <h3 className="text-center text-medium mt-5 mb-1">Online Accounts (%)</h3>
                 <input
                     className="ml-16 text-center pl-2 p-1 w-2/3 border-2 border-slate-300 rounded-xl"
                     type='number'
                     placeholder='23'
+                    onChange={handleData}
+                    name='onlineAccounts'
                 />
             </div>
             <div className="w-1/4">
