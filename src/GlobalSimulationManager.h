@@ -24,6 +24,8 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <unordered_set>
+#include "SimulationEvent.h"
 
 #ifndef DATATYPEDEFINITIONS_H_
     #include "DataTypeDefinitions.h"
@@ -41,7 +43,7 @@ using namespace omnetpp;
 #define DATASIZE_DELAY_MULTIPLIER_BUNDLE 1.0f
 
 #define COMPUTATION_DELAY_DELTA_TXN_HANDLER 0.0f
-#define COMPUTATION_DELAY_DELTA_VOTE_HANDLER 1.0f
+#define COMPUTATION_DELAY_DELTA_VOTE_HANDLER 0.0f
 #define COMPUTATION_DELAY_DELTA_PROPOSAL_HANDLER 0.0f
 #define COMPUTATION_DELAY_DELTA_BUNDLE_HANDLER 0.0f
 
@@ -73,16 +75,11 @@ struct Relay
 class NetworkDefinition
 {
 public:
-    bool InitializedNetwork;
-
     std::vector<Relay> RelayNodes;
     std::vector<ParticipationNode*> ParticipationNodes;
 
-
     NetworkDefinition(){}
     void InitNetwork(int nPartNodes, int nRelayNodes, std::vector<std::vector<int>>& PartNodeConnections, std::vector<std::vector<int>>& RelayNodeConnections);
-
-    void LoadPartNode(class ParticipationNode* PartNode, int PartNodeIndex, std::vector<int>& RelayConnections);
 };
 
 
@@ -99,11 +96,16 @@ public:
 
 
     //simulation parameter constants
-    uint64_t NumberOfPartNodes;
-    uint64_t NumberOfRelayNodes;
+//    const uint64_t TotalSupply = 10000000000;
+    inline uint64_t getNumberOfPartNodes() const{return Network.ParticipationNodes.size();}
+    inline uint64_t getNumberOfRelayNodes() const{return Network.RelayNodes.size();}
+
     uint64_t NumberOfAccounts;
     uint64_t NumberOfOnlineAccounts;
-    uint64_t TotalBalance;
+
+    uint64_t TotalMicroalgos;
+    uint64_t TotalStakedMicroalgos;
+    uint64_t Lookback_TotalStakedMicroalgos;
 
 
     //chronological time measuring
@@ -113,20 +115,12 @@ public:
 
     //represents "canonical" data
     Ledger Ledger;
-    std::unordered_map<Address, BalanceRecord> BalanceMap;
-    uint64_t TotalStakedAlgos;
+    boost::unordered_map<Address, BalanceRecord> BalanceMap;
 
-
-    //all accounts (online and offline)
-//    std::vector<Address> AccountAddresses;
-
-
-    //txn helper stuff
-    uint64_t LastTxnID;
-    inline uint64_t GetNextTxnID(){return LastTxnID++;}
 
     //Network stuff
     NetworkDefinition Network;
+    void AddParticipationNode();
 
 
     void PropagateMessageThroughNetwork(std::vector<int>& PendingRelayNodeVector, int SenderPartNode, void* msg, MsgType type);
@@ -141,24 +135,39 @@ public:
 
     //simulation events to be executed
     std::vector<class SimulationEvent*> SimEventQueue;
+    void handleMessage(cMessage* m);
+    void ScheduleTimedSimulationEvents();
 
 
     //how many nodes are running round n
-    std::unordered_map<uint64_t, uint64_t> NodesInRound;
+//    std::unordered_map<uint64_t, uint64_t> NodesInRound;
 
 
     //cached observed structures (improves memory allocation)
-    std::vector<Transaction*> LivingCirculatingTxns;
+//    std::list<std::shared_ptr<Transaction>> LivingCirculatingTxns;
 
-//    std::unordered_map<uint64_t, std::vector<Vote>> ObservedCirculatingVotes;
-//    std::vector<ProposalPayload> ObservedCirclatingProposalPayloads;
-//    std::vector<Bundle> ObservedCirculatingBundles;
+
+
+
+    //live circulating votes by round
+    boost::unordered_map<uint64_t, std::unordered_map<uint64_t, Vote>> ObservedCirculatingVotes;
+    Vote* AddCirculatingVote(Vote* vt);
+
+    boost::unordered_map<uint64_t, std::unordered_map<uint64_t, ProposalPayload>> ObservedCirculatingProposals;
+    ProposalPayload* AddCirculatingProposal(ProposalPayload* pp);
+
+//    boost::unordered_map<uint64_t, std::unordered_map<uint64_t, Transaction>> ObservedCirculatingTransactions;
+//    Transaction* AddCirculatingTransaction(Transaction* txn);
+
+//    std::unordered_map<uint64_t, std::unordered_map<uint64_t, Bundle>> ObservedCirculatingBundles;
+//    Bundle* AddCirculatingBundle(Bundle* b);
 
 
     //Global view of the ledger
     uint64_t CurrentGlobalRound;
-   struct Ledger GlobalLedger;
+    struct Ledger GlobalLedger;
     void NodeStartedNewRound(ParticipationNode* caller, uint64_t RoundStarted);
+    void UpdateBalanceMap(LedgerEntry* e);
 };
 
 

@@ -16,21 +16,19 @@
 #ifndef PARTICIPATIONNODE_H_
 #define PARTICIPATIONNODE_H_
 
-#define SIMULATE_VRF 1
+#define SIMULATE_VRF 0
 #define GLOBAL_BALANCE_TRACKER 1
 #define SIMPLIFIED_BLOCKS 0
 #define KEEP_GLOBAL_LEDGER 1
 
 //parameter defines
-#define TOTAL_NODES 400
-#define RELAYS 100
-#define START_MONEY 1000000
-#define TOTAL_ACCOUNTS 10
 #define TXN_POOL_LIMIT 1000
 #define PARTNODE_LEDGER_CACHE 1000
 
 //logging defines
 #define LOG_STEP_EVENTS 1
+#define LOG_VOTES 1
+#define LOG_GLOBAL_BLOCKS 0
 
 
 //OMNET includes
@@ -48,30 +46,46 @@
 #include <unordered_map>
 
 //sodium library includes
-#include <sodium.h>
-#include "sodium/crypto_vrf.h"
+#if !SIMULATE_VRF
+    #include <sodium.h>
+    #include "sodium/crypto_vrf.h"
+#endif
 
 //boost includes
 #include <boost/math/distributions/binomial.hpp>
 #include <boost/random.hpp>
+#include <boost/unordered_map.hpp>
 
 using namespace omnetpp;
 
 
-//logging of step events. Output is | "S" | node index | round | period | step number | simulation time | chronological time|
+//logging of step events. Output is | "S" | node index | round | period | step number | simulation time | chronological time |
 #if LOG_STEP_EVENTS
     #define OUT_LOG_STEP_EVENT() EV <<"S " << getIndex() << " " << round << " " << period << " "<< int(step) << " " << simTime() << " " << std::setprecision(15) << GlobalSimulationManager::SimManager->GetCurrentChronoTime().count() << endl
 #else
     #define OUT_LOG_STEP_EVENT() ;
 #endif
 
+//logging of vote events. Output is | "V" | node index | round | period | step | account address | vote value (H(B)) | weight | simulation time | chronological time |
+#if LOG_VOTES
+    #define OUT_LOG_VOTE_EVENT(addr, val, weight) EV <<"V " << getIndex() << " " << round << " " << period << " "<< int(step) << " " << addr << " " << val << " " << weight << " " << simTime() << " " << std::setprecision(15) << GlobalSimulationManager::SimManager->GetCurrentChronoTime().count() << endl
+#else
+    #define OUT_LOG_VOTE_EVENT(addr, val, weight) ;
+#endif
+
+//logging of vote events. Output is | "B" | node index | account address | round | period | step | vote value (H(B)) | simulation time | chronological time |
+#if LOG_GLOBAL_BLOCKS
+    #define OUT_LOG_BLOCK_COMMITTED_GLOBAL_EVENT(round, block) EV <<"B " << round << " " << block.LedgerEntryID << " " << block.ProposerAddress << " " << block.Txns.size() << " " << simTime() << " " << std::setprecision(15) << GlobalSimulationManager::SimManager->GetCurrentChronoTime().count() << endl
+#else
+    #define OUT_LOG_BLOCK_COMMITTED_GLOBAL_EVENT(round, block) ;
+#endif
+
 
 class ParticipationNode: public cSimpleModule
 {
 public:
-    static int MaxNodeID;
     int NodeID;
-    int GetNodeID();
+    int getIndex(){return NodeID;}
 
     //random 256 bit number generator
     boost::random::independent_bits_engine<boost::random::mt19937, 256, uint256_t> generator;
@@ -86,7 +100,7 @@ public:
     void UpdateBalances();
 
 #if GLOBAL_BALANCE_TRACKER
-    std::unordered_map<Address, BalanceRecord> BalanceMapLocalDivergence;
+    boost::unordered_map<Address, BalanceRecord> BalanceMapLocalDivergence;
 #endif
 
 
@@ -108,18 +122,18 @@ public:
 
 
     uint64_t TotalStakedAlgos();
-    void InitOnlineAccounts();
+    std::vector<Account> offlineAccounts;
     std::vector<Account> onlineAccounts;
     Ledger Ledger;
 
 
 
 
-    //observed proposals set
-//    std::vector<ProposalPayload> P;
-
-    //multi-purpose boradcasting function
+    //broadcasting functions
     void Broadcast(void* data, MsgType type);
+    void Broadcast(Vote& vote);
+    void Broadcast(ProposalPayload& proposal);
+    void Broadcast(Bundle& bundle);
 
     //helper functions for special values
     ProposalValue Sigma();
@@ -135,8 +149,8 @@ public:
 
     //round step functions
     LedgerEntry BlockAssembly();
-    void BlockProposal(LedgerEntry& e);
-    uint256_t ComputeBlockHash(LedgerEntry& e);
+    void BlockProposal();
+    uint64_t ComputeBlockHash(LedgerEntry& e);
 
     void SoftVote();
     uint256_t ComputeLowestCredValue(VRFOutput& Credential, uint64_t weight);
@@ -153,20 +167,20 @@ public:
     bool IsCommitable(ProposalValue& v);
 
 
-    //cached received proposal votes
-    std::vector<Vote> ProposalVotes;
-    std::unordered_map<uint256_t, LedgerEntry> CachedFullProposals[3];
+    //cached full proposals
+    boost::unordered_map<uint64_t, ProposalPayload*> CachedFullProposals[3];
+    ProposalValue* WaitingForProposal;
 
     //bundle helper functions and data structures
     //a hash table, the entry tuple is a block's hash value
-    std::unordered_map<uint256_t, Bundle[256]> ActiveBundles[3];
-    std::unordered_map<uint256_t, Bundle[256]> FinishedBundles[3];
+    boost::unordered_map<uint64_t, Bundle[256]> ActiveBundles[3];
+    boost::unordered_map<uint64_t, Bundle[256]> FinishedBundles[3];
     Bundle* FreshestBundle;
     Bundle* SigmaBundle;  //bundle of the sigma value
     ProposalValue MuValue;
 
     //cache of received fast recovery votes for easy resynchronization attempts
-    std::vector<Vote> FastRecoveryVotes[3];
+    std::vector<Vote*> FastRecoveryVotes[3];
 
 
     inline uint8_t GetPrevPeriodSlot(){return CurrentPeriodSlot == 0 ? 2 : CurrentPeriodSlot-1; }
@@ -174,7 +188,7 @@ public:
     uint8_t CurrentPeriodSlot = 0;
     //address to vote map, per step. A maximum of two votes are permitted (one equivocation)
     //at most I keep 3 periods at all times (one forward, one curent, one backward)
-    std::unordered_map<Address, Vote[2]> AddressToVoteMap[256][3];
+    boost::unordered_map<Address, Vote*[2]> AddressToVoteMap[256][3];
 //    //Equivocation vote handling stuff
 //    struct EquivocationData
 //    {
@@ -195,112 +209,55 @@ public:
 
     //message reception handlers
     void HandleTransaction(Transaction* ReceivedTxn);
-    void HandleVote(Vote& ReceivedVote);
-    void HandleProposal(ProposalPayload& ReceivedPP);
+    void HandleVote(Vote* ReceivedVote);
+    void HandleProposal(ProposalPayload* ReceivedPP);
     void HandleBundle(Bundle& ReceivedBundle);
 
 
-    void TEST_ScheduleTxnHandling(float delay, Transaction* txn);
-    void TEST_ScheduleVoteHandling(float delay, Vote& vt);
-    void TEST_ScheduleProposalHandling(float delay, ProposalPayload& pp);
-    void TEST_ScheduleBundleHandling(float delay, Bundle& b);
+    void ScheduleTxnHandling(float delay, Transaction* txn);
+    void ScheduleVoteHandling(float delay, Vote* vt);
+    void ScheduleProposalHandling(float delay, ProposalPayload* pp);
+    void ScheduleBundleHandling(float delay, Bundle& b);
 
     std::vector<Transaction*> TravelingTxnQueue;
-    std::vector<Vote> TravelingVoteQueue;
-    std::vector<ProposalPayload> TravelingProposalQueue;
+    std::vector<Vote*> TravelingVoteQueue;
+    std::vector<ProposalPayload*> TravelingProposalQueue;
     std::vector<Bundle> TravelingBundleQueue;
-
-
 
 
     void ResynchronizationAttempt();
 
 
-
-
     //sortition functions
+#if SIMULATE_VRF
     VRFOutput SimulateVRF();
+#else
     VRFOutput RunVRF(Account& a, unsigned char* bytes, uint64_t bytesLen);
     bool VerifyVRF(Account& a, unsigned char* bytes, uint64_t bytesLen, VRFOutput& HashAndProof);
+#endif
     uint64_t sortition_binomial_cdf_walk(double n, double p, double ratio, uint64_t money);
     uint64_t Sortition(Account& a, uint64_t totalMoney, double expectedSize, VRFOutput& cryptoDigest, short step);
     uint64_t VerifySortition();
-
-    BigFloat two_to_the_hashlen; //constant for sortition
-
-
+    static BigFloat two_to_the_hashlen; //constant for sortition
 
 
     //transaction pool stuff
     std::vector<Transaction*> TransactionPool;  //limit to 75000? txHandler_test.go
     void SimulateTransactions();
     Transaction GenerateRandomTransaction();
-
-
+    Transaction GenerateKeyregTransaction(Account& a);
 
 
     //verification stuff
-    bool VerifyProposalPayload(LedgerEntry& e);
-    bool VerifyVote(Vote& vt);
+    bool VerifyTransaction(Transaction* txn);
+    bool VerifyProposalPayload(ProposalPayload& pp);
+    bool VerifyVote(Vote* vt);
     bool VerifyBundle(Bundle& b);
 
 
-
-    //TESTING
     //direct network connections (relays I see)
     std::vector<int> RelayConnections;
 };
-
-
-
-
-
-
-// class ParticipationNode: public cSimpleModule
-// {
-
-//     std::vector<LedgerEntry> P;   //observedProposals
-
-//     std::vector<Vote> SoftVotes;  //observedSoftVotes       //ver: sorted by value?
-//     std::vector<Vote> CertVotes;  //observedCertVotes
-//     std::vector<Vote> RecoveryVotes;
-
-//     std::vector<Vote> PeriodObservedVotes[256];
-
-
-//     std::set<struct Proposal> ObservedProposals;
-
-
-//     //node initialization functions
-//     void AddGenesisBlock();
-//     void InitBalanceTracker();
-
-
-//     //signature functions
-//     void Sign(Account& a, unsigned char* data, unsigned char* outSignedData);
-//     uint64_t VerifySignature(unsigned char* SignedData, unsigned char* PK); //outputs the "weight" of signature
-
-
-//     //multipurpose cryptographic hash. TODO: implement SHA512/256 (no esta en sodium?)
-//     inline void Hash_SHA256(unsigned char* out, unsigned char* in, uint64_t len){crypto_hash_sha256(out, in, len);}  //TODO: switch for SHA512/256
-
-
-//     //seed computation and verification
-//     void DeriveSeed(stSeedAndProof& SeedAndProof, Account& a, unsigned int period, unsigned int round);
-//     bool VerifySeed();
-
-
-//     //main algorithm subroutines
-//     uint64_t TotalStakedAlgos();
-
-//     void ConfirmBlock(const LedgerEntry& hblock);
-
-
-// protected:
-
-
-//     std::vector<Account> OnlineAccounts;
-//     Ledger Ledger;
 
 
 #endif /* PARTICIPATIONNODE_H_ */

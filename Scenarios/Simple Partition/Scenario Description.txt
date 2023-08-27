@@ -1,0 +1,4 @@
+Starting context: DEFAULT
+Partition at 1000 simulation seconds
+Reconnection at 10000 simulation seconds
+Finalizing 20000 simulation seconds

@@ -11,8 +11,8 @@
 
 typedef boost::multiprecision::uint256_t uint256_t;
 typedef boost::multiprecision::cpp_int BigInt;
-typedef boost::multiprecision::number<boost::multiprecision::cpp_bin_float<156>> BigFloat; //2**(64*8) has 155 decimal digits
-
+//typedef boost::multiprecision::number<boost::multiprecision::cpp_bin_float<156>> BigFloat; //2**(64*8) has 155 decimal digits
+typedef boost::multiprecision::number<boost::multiprecision::cpp_bin_float<58*(256+1)>> BigFloat;
 
 typedef uint64_t Address;
 
@@ -36,16 +36,16 @@ public:
 };
 
 
-//transaction stuff
-//work in progress
 class Transaction
 {
 public:
-    Transaction(){}
-
+    static uint64_t NEXT_ID;
     uint64_t txnID;
 
-    enum TxnTypeEnum{PAY, KEY_REG, KEY_DEREG};
+
+    Transaction(){txnID = NEXT_ID++;}
+
+    enum TxnTypeEnum{PAY, KEYREG};
     TxnTypeEnum type;
 
     Address Sender;
@@ -61,6 +61,10 @@ public:
     uint64_t ValidUntilRound;
 
 
+    //keyreg stuff
+
+
+
     bool operator==(const Transaction& txn) const
     {
         return txnID == txn.txnID;
@@ -68,9 +72,30 @@ public:
 };
 
 
-class SignedTransaction
+class PayTransaction : public Transaction
 {
-    Transaction Txn;
+
+};
+
+
+class KeyregTransaction : public Transaction
+{
+    unsigned char VotePK[32];
+    unsigned char SelectionPK[32];
+
+    uint64_t voteFirst;
+    uint64_t voteLast;
+
+    //unused
+    //stateProofPK
+    //voteKeyDilution
+    //nonparticipation
+};
+
+
+struct SignedTransaction
+{
+    Transaction* Txn;
 
     //signature
 };
@@ -92,6 +117,9 @@ struct Account
     uint64_t Money;
 
     VRFKeyPair VRFKeys;
+
+    //pointer to the balance map (useful for updating) all node managed accounts after finishing a round
+    class BalanceRecord* BalanceMapPtr;
 };
 
 
@@ -99,8 +127,6 @@ struct VRFOutput
 {
     unsigned char VRFHash[64] = {0};
     unsigned char VRFProof[80] = {0};
-    //std::string VRFHash;
-    //std::string VRFProof;
 
     VRFOutput()
     {
@@ -136,17 +162,15 @@ struct stSeedAndProof
 
 struct LedgerEntry
 {
-    LedgerEntry()
-    {
-
-    }
-    LedgerEntry(int v):PlaceholderID(v){}
+    //used for speeding up comparison and indexing
+    static uint64_t NEXT_ID;
+    uint64_t LedgerEntryID;
 
 
-    //o is some opaque object O
-    //unsigned char* Obj;
-    int PlaceholderID;
+    static LedgerEntry EMPTY_BLOCK;
 
+
+    LedgerEntry(){LedgerEntryID = NEXT_ID++;}
     //header
     //TODO: ALL HEADER STUFF
     stSeedAndProof SeedAndProof;
@@ -177,9 +201,9 @@ struct LedgerEntry
 struct Ledger
 {
     //Ledger params
-    uint64_t TMax = 1000; //length of the transaction tail
-    uint64_t BMax = 5242880; //maximum number of txn bytes per block
-    uint64_t bMin = 100000; //minimum balance for an address
+//    uint64_t TMax = 1000; //length of the transaction tail
+//    uint64_t BMax = 5242880; //maximum number of txn bytes per block
+//    uint64_t bMin = 100000; //minimum balance for an address
 
 
     bool ValidEntry(LedgerEntry e){return true; }
@@ -190,14 +214,17 @@ struct Ledger
 
 
     std::vector<LedgerEntry> Entries;
-
-    //chanteada
-    std::vector<uint256_t> SimEntries;
 };
 
 
 struct ProposalPayload
 {
+    //used for speeding up comparison and indexing
+    static uint64_t NEXT_ID;
+    uint64_t ProposalPayloadID;
+    uint64_t RoundOfAssembly;
+
+
     LedgerEntry e;
     uint256_t y;   //signature
 
@@ -206,39 +233,35 @@ struct ProposalPayload
     uint64_t p_orig;
 
 
-    ProposalPayload(){}
-    ProposalPayload(LedgerEntry& entry):e(entry){}
-
+    ProposalPayload(uint64_t r):RoundOfAssembly(r){ProposalPayloadID=NEXT_ID++;}
+    ProposalPayload(uint64_t r, LedgerEntry& entry):RoundOfAssembly(r),e(entry){ProposalPayloadID=NEXT_ID++;}
 
 
     struct performanceCachedStuff
     {
-        uint256_t d; //digest(e), useful for looking up all votes associated with this proposal
+        //uint256_t d; //digest(e), useful for looking up all votes associated with this proposal
+        uint64_t d;
     }Cached;
 };
 
 
 struct ProposalValue
 {
-    ProposalValue()
-    {
-        I_orig = 0; p_orig = 0; d = 0; Cached.weight = 0; Cached.lowestComputedHash = 0;
-
-    }
-
+    ProposalValue():I_orig(0), p_orig(0), d(0) {Cached.weight = 0; Cached.lowestComputedHash = 0;}
+    ProposalValue(Address I, uint64_t p, uint64_t dig):I_orig(I), p_orig(p), d(dig){}
 
     Address I_orig;
     uint64_t p_orig;
 
-    //uint64_t d;   //digest(e), o sea Hash(e)
-    uint256_t d;
+//    uint256_t d;
+    uint64_t d;
 
-    struct unused
-    {
-        uint256_t h;  //Hash(encoding(e))
-    };
+//    struct unused
+//    {
+//        uint256_t h;  //Hash(encoding(e))
+//    };
 
-    
+
     struct performanceCachedStuff
     {
         VRFOutput Credentials;
@@ -250,18 +273,23 @@ struct ProposalValue
 
     bool operator==(const ProposalValue& a) const
     {
-        return (I_orig == a.I_orig && p_orig == a.p_orig && d == a.d && Cached.Credentials == a.Cached.Credentials && Cached.lowestComputedHash == a.Cached.lowestComputedHash);
+        return (I_orig == a.I_orig && p_orig == a.p_orig && d == a.d); //&& Cached.Credentials == a.Cached.Credentials && Cached.lowestComputedHash == a.Cached.lowestComputedHash);
     }
 
     bool operator!=(const ProposalValue& a) const
     {
-        return (I_orig != a.I_orig || p_orig != a.p_orig || d != a.d || Cached.Credentials != a.Cached.Credentials || Cached.lowestComputedHash != a.Cached.lowestComputedHash);
+        return (I_orig != a.I_orig || p_orig != a.p_orig || d != a.d); //|| Cached.Credentials != a.Cached.Credentials || Cached.lowestComputedHash != a.Cached.lowestComputedHash);
     }
 };
 
 
 struct Vote
 {
+    //used for speeding up comparison
+    static uint64_t NEXT_ID;
+    uint64_t voteID;
+
+
     //raw vote
     Address I;
     uint64_t r;
@@ -277,13 +305,13 @@ struct Vote
 
     bool operator == (const Vote& rhs) const
     {
-        return I == rhs.I && r == rhs.r && p == rhs.p && s == rhs.s && v == rhs.v && weight == rhs.weight;
+        return voteID == rhs.voteID;
+//        return I == rhs.I && r == rhs.r && p == rhs.p && s == rhs.s && v == rhs.v && weight == rhs.weight;
     }
 
-    Vote():I(0), r(0), p(0), s(0), weight(0){}
+    Vote():I(0), r(0), p(0), s(0), weight(0){voteID = NEXT_ID++;}
     Vote(Address addr, uint64_t round, uint64_t period, uint8_t step, ProposalValue propVal, VRFOutput cred, uint64_t j):
-        I(addr), r(round), p(period), s(step), v(propVal), VRFOut(cred), weight(j){}
-//    Vote(Vote& vt):I(vt.I), r(vt.r), p(vt.p), s(vt.s), v(vt.v), VRFOut(vt.VRFOut), weight(vt.weight){}
+        I(addr), r(round), p(period), s(step), v(propVal), VRFOut(cred), weight(j){voteID = NEXT_ID++;}
 };
 
 
@@ -298,10 +326,15 @@ struct EquivocationVote
 
 struct Bundle
 {
-    uint64_t weight;
-    std::vector<Vote> votes;
+    //used for speeding up comparison
+    static uint64_t NEXT_ID;
+    uint64_t bundleID;
 
-    Bundle():weight(0){}
+
+    uint64_t weight;
+    std::vector<Vote*> votes;
+
+    Bundle():weight(0){bundleID = NEXT_ID++; }
 };
 
 

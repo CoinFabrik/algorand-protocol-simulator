@@ -17,8 +17,6 @@
 
 simple ParticipationNode
 {
-    gates:
-        inout gate[];
 }
 
 
@@ -29,11 +27,9 @@ simple GlobalSimulationManager
 
 network AlgorandNetwork
 {
-	int partCount = 400;
-	
     submodules:
         Manager : GlobalSimulationManager;
-        PartNode[partCount]: ParticipationNode;
+        PartNode[0]: ParticipationNode;
         
     connections:
 //        for i=0..partCount-1, for j=0..relCount-1

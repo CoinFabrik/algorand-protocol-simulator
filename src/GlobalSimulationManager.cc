@@ -18,27 +18,61 @@
 
 Define_Module(GlobalSimulationManager);
 
-//initialize singleton pointer
+//initialize singleton pointer and ID counters
 GlobalSimulationManager* GlobalSimulationManager::SimManager = nullptr;
+uint64_t Transaction::NEXT_ID = 0;
+uint64_t Vote::NEXT_ID = 0;
+uint64_t ProposalPayload::NEXT_ID = 0;
+uint64_t LedgerEntry::NEXT_ID = 0;
+uint64_t Bundle::NEXT_ID = 0;
+LedgerEntry LedgerEntry::EMPTY_BLOCK;
 
 
 GlobalSimulationManager::GlobalSimulationManager()
 {
-    if (!SimManager)
-    {
-        SimManager = this;
-        Network.InitializedNetwork = false;
-        LastTxnID = 0;
-    }
+    if (!SimManager) SimManager = this;
+
+    NumberOfAccounts = 0;
+    NumberOfOnlineAccounts = 0;
+
+    TotalMicroalgos = 0;
+    TotalStakedMicroalgos = 0;
+
+    LedgerEntry::EMPTY_BLOCK.LedgerEntryID = 0;
 }
 
 
 void GlobalSimulationManager::initialize()
 {
-    StartTime = std::chrono::high_resolution_clock::now();
-
     std::string net("../test_network.nf"), bal("../test_balance.bf"), pl;
     LoadContextFromFiles(net, bal, pl);
+
+
+
+//    for (float i = 0.f; i < 200.f; i+= 10.f)
+//    {
+//        scheduleAfter(i+5.f, new cMessage(nullptr, 0));
+//        scheduleAfter(i+10.f, new cMessage(nullptr, 1));
+//    }
+    scheduleAfter(500, new cMessage(nullptr, 2));
+
+    StartTime = std::chrono::high_resolution_clock::now();
+}
+
+
+void GlobalSimulationManager::AddParticipationNode()
+{
+    cModule* parentmod = getParentModule();
+    int size = parentmod->getSubmoduleVectorSize("PartNode");
+    parentmod->setSubmoduleVectorSize("PartNode", size+1);
+
+    cModuleType* nodeType = cModuleType::get("ParticipationNode");
+//    if (!nodeType) error("Module Type \"%s\" not found", type.c_str());
+
+    int nodeID = Network.ParticipationNodes.size();
+    ParticipationNode* node = (ParticipationNode*)(nodeType->create("PartNode", parentmod, size));
+    node->NodeID = nodeID;
+    Network.ParticipationNodes.push_back(node);
 }
 
 
@@ -46,67 +80,35 @@ void GlobalSimulationManager::initialize()
 
 void NetworkDefinition::InitNetwork(int nPartNodes, int nRelayNodes, std::vector<std::vector<int>>& PartNodeConnections, std::vector<std::vector<int>>& RelayNodeConnections)
 {
-    ParticipationNodes.resize(nPartNodes);
     RelayNodes.resize(nRelayNodes);
-    InitializedNetwork = true;
 
-
-//    for (int PartID = 0; PartID < PartNodeConnections.size(); PartID++)
-//    {
-//        auto& ConnectionList = PartNodeConnections[PartID];
-//        for (int ConID = 0; ConID < ConnectionList.size(); ConID+=3)
-//        {
-//            int RelayID = ConnectionList[ConID];
-//            RelayNodes[RelayID].ParticipationConnections.push_back(PartID);
-//
-//            NetworkDefinition::ConnectionDelay delay(connectionList[ConID+1], connectionList[ConID+2]);
-//            RelayNodes[RelayID].PartNodesConnectionDelays.push_back(delay);
-//
-//            //ver si ya estan creados!
-//            ParticipationNodes[PartID]->RelayConnections.push_back(RelayID);
-//        }
-//    }
-//
-//
-//    for (int RelayID = 0; RelayID < RelayNodeConnections.size(); RelayID++)
-//    {
-//        auto& ConnectionList = RelayNodeConnections[RelayID];
-//        for (int ConID = 0; ConID < ConnectionList.size(); ConID+=3)
-//        {
-//            int PeerRelayID = ConnectionList[RelayID];
-//            RelayNodes[RelayID].RelayConnections.push_back(PeerRelayID);
-//
-//            NetworkDefinition::ConnectionDelay delay(connectionList[ConID+1], connectionList[ConID+2]);
-//            RelayNodes[RelayID].RelayConnectionDelays.push_back(delay);
-//        }
-//    }
-
-
-    //Fully connected
-//    for (int i = 0; i < nRelayNodes; i++)
-//        for (int h = 0; h < nRelayNodes; h++)
-//            if (h != i)
-//            {
-//                RelayNodes[i].RelayConnections.push_back(h);
-//            }
-    for (int i = 0; i < nRelayNodes; i++)
-        for (int h = 0; h < 10; h++)
+    for (int PartID = 0; PartID < PartNodeConnections.size(); PartID++)
+    {
+        std::vector<int>& LineConnections = PartNodeConnections[PartID];
+        for (int idx = 0; idx < LineConnections.size(); idx+=3)
         {
-            int RelayToConnect = rand() % nRelayNodes;
-            while (RelayToConnect == i || std::find(RelayNodes[i].RelayConnections.begin(), RelayNodes[i].RelayConnections.end(), RelayToConnect) != RelayNodes[i].RelayConnections.end())
-                RelayToConnect = rand() % nRelayNodes;
+            int RelayID = LineConnections[idx];
+            RelayNodes[RelayID].ParticipationConnections.push_back(PartID);
+            RelayNodes[RelayID].PartNode_InConnectionDelays.push_back(LineConnections[idx+1]);
+            RelayNodes[RelayID].PartNode_OutConnectionDelays.push_back(LineConnections[idx+2]);
 
-            RelayNodes[i].RelayConnections.push_back(RelayToConnect);
-            RelayNodes[RelayToConnect].RelayConnections.push_back(i);
+            ParticipationNodes[PartID]->RelayConnections.push_back(RelayID);
         }
-}
+    }
 
 
-void NetworkDefinition::LoadPartNode(class ParticipationNode* PartNode, int PartNodeIndex, std::vector<int>& RelayConnections)
-{
-    ParticipationNodes[PartNodeIndex] = PartNode;
-    for (int RelayID : PartNode->RelayConnections)
-        RelayNodes[RelayID].ParticipationConnections.push_back(PartNodeIndex);
+    for (int RelayID = 0; RelayID < RelayNodeConnections.size(); RelayID++)
+    {
+        std::vector<int>& LineConnections = RelayNodeConnections[RelayID];
+        for (int idx = 0; idx < LineConnections.size(); idx+=3)
+        {
+            int ConRelID = LineConnections[idx];
+            RelayNodes[RelayID].RelayConnections.push_back(ConRelID);
+
+            RelayNodes[RelayID].Relay_InConnectionDelays.push_back(LineConnections[idx+1]);
+            RelayNodes[RelayID].Relay_OutConnectionDelays.push_back(LineConnections[idx+2]);
+        }
+    }
 }
 
 
@@ -116,8 +118,8 @@ void GlobalSimulationManager::PropagateMessageThroughNetwork(std::vector<int>& P
 {
     Enter_Method_Silent("PropagateMessageThroughNetwork");
 
-    bool VisitedRelayNodes[RELAYS] = {false};
-    bool VisitedPartNodes[TOTAL_NODES] = {false};
+    std::vector<bool> VisitedRelayNodes(Network.RelayNodes.size(), false);
+    std::vector<bool> VisitedPartNodes(Network.ParticipationNodes.size(), false);
     for (int r : PendingRelayNodeVector) VisitedRelayNodes[r] = true;
 
     //initializing two stacks here (they will be processed as such)
@@ -166,29 +168,29 @@ void GlobalSimulationManager::PropagateMessageThroughNetwork(std::vector<int>& P
                 FinalDelay = DATASIZE_DELAY_MULTIPLIER_TXN * 0.f + COMPUTATION_DELAY_DELTA_TXN_HANDLER;
 //                Network.ParticipationNodes[PartNodeID]->HandleTransaction(*(Transaction*)(msg));
 
-
-                LivingCirculatingTxns.push_back(new Transaction(*(Transaction*)(msg)));
-
-
-                Network.ParticipationNodes[PartNodeID]->TEST_ScheduleTxnHandling(FinalDelay, (Transaction*)(msg));
+                Network.ParticipationNodes[PartNodeID]->ScheduleTxnHandling(FinalDelay, (Transaction*)(msg));
                 break;
 
             case PROPOSAL:
-                FinalDelay = DATASIZE_DELAY_MULTIPLIER_PROPOSAL * 0.5f + COMPUTATION_DELAY_DELTA_PROPOSAL_HANDLER;
+                FinalDelay = DATASIZE_DELAY_MULTIPLIER_PROPOSAL * 0.0f + COMPUTATION_DELAY_DELTA_PROPOSAL_HANDLER;
 //                Network.ParticipationNodes[PartNodeID]->HandleProposal(*(ProposalPayload*)(msg));
-                Network.ParticipationNodes[PartNodeID]->TEST_ScheduleProposalHandling(FinalDelay, *(ProposalPayload*)(msg));
+
+//                Network.ParticipationNodes[PartNodeID]->ScheduleProposalHandling(FinalDelay, AddCirculatingProposal((ProposalPayload*)(msg)));
+                Network.ParticipationNodes[PartNodeID]->ScheduleProposalHandling(FinalDelay, (ProposalPayload*)(msg));
                 break;
 
             case VOTE:
-                FinalDelay = DATASIZE_DELAY_MULTIPLIER_VOTE * 0.5f + COMPUTATION_DELAY_DELTA_VOTE_HANDLER;
+                FinalDelay = DATASIZE_DELAY_MULTIPLIER_VOTE * 0.0f + COMPUTATION_DELAY_DELTA_VOTE_HANDLER;  //VER! BUG CON 2.f (corregido?)
 //                Network.ParticipationNodes[PartNodeID]->HandleVote(*(Vote*)(msg));
-                Network.ParticipationNodes[PartNodeID]->TEST_ScheduleVoteHandling(FinalDelay, *(Vote*)(msg));
+
+                Network.ParticipationNodes[PartNodeID]->ScheduleVoteHandling(FinalDelay, (Vote*)(msg));
                 break;
 
             case BUNDLE:
                 FinalDelay = DATASIZE_DELAY_MULTIPLIER_BUNDLE * 0.f + COMPUTATION_DELAY_DELTA_BUNDLE_HANDLER;
 //                Network.ParticipationNodes[PartNodeID]->HandleBundle(*(Bundle*)(msg));
-                Network.ParticipationNodes[PartNodeID]->TEST_ScheduleBundleHandling(FinalDelay, *(Bundle*)(msg));
+
+                Network.ParticipationNodes[PartNodeID]->ScheduleBundleHandling(FinalDelay, *(Bundle*)(msg));
                 break;
 
             default:
@@ -196,6 +198,29 @@ void GlobalSimulationManager::PropagateMessageThroughNetwork(std::vector<int>& P
         }
     }
 }
+
+
+Vote* GlobalSimulationManager::AddCirculatingVote(Vote* vt)
+{
+    auto entry = ObservedCirculatingVotes[vt->r].emplace(vt->voteID, *vt);
+    return &((*entry.first).second);
+}
+
+
+ProposalPayload* GlobalSimulationManager::AddCirculatingProposal(ProposalPayload* pp)
+{
+    auto entry = ObservedCirculatingProposals[pp->RoundOfAssembly].emplace(pp->ProposalPayloadID, *pp);
+    return &((*entry.first).second);
+}
+
+
+//Bundle* GlobalSimulationManager::AddCirculatingBundle(Bundle* b)
+//{
+//    if(!b->votes.size()) return nullptr;
+//
+//    auto entry = ObservedCirculatingBundles[b->votes[0]->r].emplace(b->bundleID, *b);
+//    return &((*entry.first).second);
+//}
 
 
 void GlobalSimulationManager::LoadContextFromFiles(std::string& NetworkDef_filename, std::string& BalanceDef_filename, std::string& CF_filename)
@@ -222,57 +247,55 @@ void GlobalSimulationManager::LoadContextFromFiles(std::string& NetworkDef_filen
 
     std::stringstream s(firstLine);
     std::getline(s, strN, ' ');
-    int nPartNodes = std::stoi(strN);
+    uint64_t nPartNodes = std::stoull(strN);
+
 
     std::getline(s, strN, ' ');
-    int nRelayNodes = std::stoi(strN);
+    uint64_t nRelayNodes = std::stoull(strN);
 
 
+    //Create all required initial participation nodes
+    for (int i = 0; i < nPartNodes; i++)
+        AddParticipationNode();
 
-    //TODO: LEVANTAR DELAYS Y PONERLOS DONDE CORRESPONDE
+
+    //get all partnode to relay connections (opt: with in delay and out delay)
+    std::vector<std::vector<int>> PartNodeConnections;
+    for (int i = 0; i < nPartNodes; i++)
+    {
+        std::vector<int> LineConnections;
+
+        std::string line;
+        std::getline(fin, line);
+
+        //in line, I have all connections of the i-th partNode
+        s = std::stringstream(line);
+        while(std::getline(s, strN, ' '))
+            LineConnections.push_back(std::stoi(strN));
+
+        PartNodeConnections.push_back(LineConnections);
+    }
 
 
+    //get all relay to relay connections (opt: with in delay and out delay)
+    std::vector<std::vector<int>> RelayConnections;
+    for (int i = 0; i < nRelayNodes; i++)
+    {
+        std::vector<int> LineConnections;
 
-//    //get all partnode to relay connections (opt: with in delay and out delay)
-//    for (int i = 0; i < nPartNodes; i++)
-//    {
-//        std::string line;
-//        std::getline(fin, line);
-//
-//        //in line, I have all connections of the i-th partNode
-//        s = std::stringstream(line);
-//        while(std::getline(s, strN, ' '))
-//        {
-//
-//        }
-//    }
-//
-//
+        std::string line;
+        std::getline(fin, line);
+
+        //in line, I have all connections of the i-th relay node
+        s = std::stringstream(line);
+        while(std::getline(s, strN, ' '))
+            LineConnections.push_back(std::stoi(strN));
+
+        RelayConnections.push_back(LineConnections);
+    }
+
     fin.close();
-//
-//    //get all relay to relay connections (with in delay and out delay)
-//    //TODO
-//
-//
-//
-//
-////    for (std::string line; std::getline(fin, line);)
-////    {
-////
-////
-////    }
-//
-////    vector<std::string> row;
-////    std::string line, word, temp;
-////    while(fin >> temp)
-////    {
-////        //skip first row as its the header
-////        row.clear();
-////    }
-
-
-    std::vector<std::vector<int>> connections;
-    Network.InitNetwork(nPartNodes, nRelayNodes, connections, connections);
+    Network.InitNetwork(nPartNodes, nRelayNodes, PartNodeConnections, RelayConnections);
 
 
 
@@ -286,23 +309,14 @@ void GlobalSimulationManager::LoadContextFromFiles(std::string& NetworkDef_filen
         return;
     }
 
-//    std::getline(fin, firstLine);
-//
-//    std::stringstream b(firstLine);
-//    std::getline(b, strN, ' ');
-//    uint64_t TotalBalance = std::stoi(strN);
-//
-//    std::getline(b, strN, ' ');
-//    uint64_t TotalOnlineBalance = std::stoi(strN);
-
     while(std::getline(fin, firstLine))
     {
         std::stringstream t(firstLine);
         std::getline(t, strN, ' ');
-        uint64_t AccountAddress = std::stoi(strN);
+        uint64_t AccountAddress = std::stoull(strN);
 
         std::getline(t, strN, ' ');
-        uint64_t AccountBalance = std::stoi(strN);
+        uint64_t AccountBalance = std::stoull(strN);
 
         std::getline(t, strN, ' ');
         bool AccountStatus = std::stoi(strN);
@@ -312,8 +326,6 @@ void GlobalSimulationManager::LoadContextFromFiles(std::string& NetworkDef_filen
             PartNodes.push_back(std::stoi(strN));
 
         AddAccountRecord(AccountAddress, AccountBalance, AccountStatus, PartNodes);
-
-//        EV << "BLN " << Network.ParticipationNodes[PartNodes[0]]->getIndex() << endl;
     }
 
     fin.close();
@@ -322,43 +334,129 @@ void GlobalSimulationManager::LoadContextFromFiles(std::string& NetworkDef_filen
 
 void GlobalSimulationManager::AddAccountRecord(uint64_t address, uint64_t balance, bool status, std::vector<int>& partnodes)
 {
-    NumberOfAccounts++;
-
     BalanceMap[address] = BalanceRecord(balance, status);
-    TotalBalance += balance;
+
+    NumberOfAccounts++;
+    TotalMicroalgos += balance;
 
     if (status)
     {
-        TotalStakedAlgos += balance;
+        TotalStakedMicroalgos += balance;
         NumberOfOnlineAccounts++;
-    }
 
-//    for (int& id : partnodes)
-//    {
-//        Network.ParticipationNodes[id]->onlineAccounts.push_back(Account(address, balance));
-//    }
+        for (int id : partnodes)
+            Network.ParticipationNodes[id]->onlineAccounts.push_back(Account(address, balance));
+    }
+    else for (int id : partnodes) Network.ParticipationNodes[id]->offlineAccounts.push_back(Account(address, balance));
 }
 
 
 void GlobalSimulationManager::NodeStartedNewRound(ParticipationNode* caller, uint64_t RoundStarted)
 {
-//    EV << "NSNR "<< LivingCirculatingTxns.size() << endl;
-
-    NodesInRound[RoundStarted-1]--;
-    if (NodesInRound[RoundStarted-1] == 0)
+    bool TodosPasaronRound = true;
+    int NPasaronRound = 0;
+    for (ParticipationNode* pn : Network.ParticipationNodes)
     {
-        //cleanup
-//        for (Transaction* txn: LivingCirculatingTxns)
-//
+        if (pn->round < RoundStarted)
+        {
+            TodosPasaronRound = false;
+        }
+        else NPasaronRound++;
     }
 
 
-    NodesInRound[RoundStarted]++;
-    if (NodesInRound[RoundStarted] > NumberOfPartNodes/2)
+    if (TodosPasaronRound)
+    {
+        ObservedCirculatingVotes[RoundStarted-1].clear();
+        ObservedCirculatingVotes.erase(RoundStarted-1);
+
+        ObservedCirculatingProposals[RoundStarted-1].clear();
+        ObservedCirculatingProposals.erase(RoundStarted-1);
+
+//        ObservedCirculatingBundles[RoundStarted-1].clear();
+//        ObservedCirculatingBundles.erase(RoundStarted-1);
+        //cleanup
+//        for (Transaction* txn: LivingCirculatingTxns)
+    }
+
+    if (NPasaronRound > getNumberOfPartNodes()/2 && RoundStarted > CurrentGlobalRound)
     {
         CurrentGlobalRound = RoundStarted;
-        GlobalLedger.Entries.push_back(*(caller->Ledger.Entries.end()-1));
 
-//        std::fid
+        //hago esto para considerar la posibilidad de un fork
+//        std::unordered_map<uint64_t, uint64_t> CandidateHashToConfirmedMap;
+
+        GlobalLedger.Entries.push_back(caller->Ledger.Entries.back());
+        UpdateBalanceMap(&GlobalLedger.Entries.back());
+
+        EV << "G " << CurrentGlobalRound << " " << GlobalLedger.Entries.back().LedgerEntryID << " "<< simTime() << " " << std::setprecision(15) << GetCurrentChronoTime().count() << endl;
+    }
+}
+
+
+void GlobalSimulationManager::UpdateBalanceMap(LedgerEntry* e)
+{
+    //VER mover los parametros despues
+    auto BalanceLookback = 2*2*80;
+
+
+    //update all balances according to last block
+    for (Transaction* txn : e->Txns)
+    {
+        //por ahora solo pay
+        GlobalSimulationManager::SimManager->BalanceMap[txn->Sender].RawBalance -= txn->Fee + txn->Amount;
+        GlobalSimulationManager::SimManager->BalanceMap[txn->Receiver].RawBalance += txn->Amount;
+        //Balance[FEE_SINK_ADDRESS].RawBalance += txn.Fee;
+    }
+
+    if (GlobalLedger.Entries.size()>BalanceLookback)
+    {
+        //updatear all cached balances according to lookback block
+        auto& LookbackBlock =  *(GlobalLedger.Entries.end() - 1 - BalanceLookback);
+        for (Transaction* txn : LookbackBlock.Txns)
+        {
+            //por ahora solo pay
+            GlobalSimulationManager::SimManager->BalanceMap[txn->Sender].OldBalance -= txn->Fee + txn->Amount;
+            GlobalSimulationManager::SimManager->BalanceMap[txn->Receiver].OldBalance += txn->Amount;
+        }
+    }
+}
+
+
+
+
+void GlobalSimulationManager::ScheduleTimedSimulationEvents()
+{
+//    for (SimulationEvent* ev : SimEventQueue)
+//    {
+//        auto* t_ev = (TimeTriggeredSimulationEvent*)(ev);
+//        scheduleAfter(t_ev->TriggerTime, t_ev->SchedulingMessage);
+//    }
+}
+
+
+void GlobalSimulationManager::handleMessage(cMessage* msg)
+{
+    if (msg->isSelfMessage()) //timeout event
+    {
+        if (msg->getKind() == 0)
+        {
+            PartitionSimulationEvent pEv = PartitionSimulationEvent();
+            pEv.ExecuteEvent();
+
+            cancelAndDelete(msg);
+        }
+        else if (msg->getKind() == 1)
+        {
+            ReconnectionSimulationEvent rEv = ReconnectionSimulationEvent();
+            rEv.ExecuteEvent();
+
+            cancelAndDelete(msg);
+        }
+        else
+        {
+            cancelAndDelete(msg);
+            endSimulation();
+        }
     }
 }
