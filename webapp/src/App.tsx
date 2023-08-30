@@ -1,9 +1,11 @@
+import Graph from './pages/Graph'
 import InputData from './pages/InputData'
 
 function App (): JSX.Element {
   return (
     <>
-      <InputData />
+      <Graph />
+      {/* <InputData /> */}
     </>
   )
 }
