@@ -70,9 +70,9 @@ def createBalanceFile(nAccounts, nOnlineAccounts, TotalBalance, nPartNodes):
     return accDict
 
 
-nAccounts =  300000 + 1000 #30000 + 300 #10*200
+nAccounts =  300000 + 300 #30000 + 300 #10*200
 # accDict = createBalanceFile(nAccounts, nAccounts, 10*200*1000000 * 1e6, 200)
-accDict = createBalanceFile(nAccounts, 1000, 1836000000 * 1e6, 2000)
+accDict = createBalanceFile(nAccounts, 300, 1836000000 * 1e6, 1600)
 
 
 

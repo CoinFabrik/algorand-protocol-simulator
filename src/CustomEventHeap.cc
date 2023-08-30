@@ -6,7 +6,7 @@
 
 #include "CustomEventHeap.h"
 
-#define TEST 0
+#define TEST 1
 
 
 Register_Class(CustomEventHeap);
@@ -27,6 +27,7 @@ CustomEventHeap::~CustomEventHeap()
 void CustomEventHeap::insert(cEvent* event)
 {
 #if TEST
+    event->setHeapIndex(0);
     take(event);
     Events.insert(event);
 #else
@@ -50,6 +51,7 @@ cEvent* CustomEventHeap::removeFirst()
 {
 #if TEST
     cEvent* ev = Events.removeFirst();
+    ev->setHeapIndex(-1);
     drop(ev);
     return ev;
 #else
@@ -62,6 +64,7 @@ cEvent* CustomEventHeap::removeFirst()
 void CustomEventHeap::putBackFirst(cEvent *event)
 {
 #if TEST
+    event->setHeapIndex(0);
     take(event);
     Events.insert(event);
 #else
@@ -73,7 +76,10 @@ void CustomEventHeap::putBackFirst(cEvent *event)
 cEvent* CustomEventHeap::remove(cEvent *event)
 {
 #if TEST
-    return nullptr;
+    event->setHeapIndex(-1);
+    Events.remove(event);
+    drop(event);
+    return event;
 #else
     return cEventHeap::remove(event);
 #endif
@@ -114,9 +120,9 @@ int CustomEventHeap::getLength() const
 cEvent* CustomEventHeap::get(int k)
 {
 #if TEST
-    return cEventHeap::get(k);
-#else
     return nullptr;
+#else
+        return cEventHeap::get(k);
 #endif
 }
 

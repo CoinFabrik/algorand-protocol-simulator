@@ -40,4 +40,4 @@ def createNetworkFile(nPartNodes, nRelayNodes):
 
 
 
-createNetworkFile(2000, 120)
+createNetworkFile(1600, 120)

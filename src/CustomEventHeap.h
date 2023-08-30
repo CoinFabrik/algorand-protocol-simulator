@@ -10,36 +10,46 @@
 
 #include <omnetpp.h>
 #include <vector>
+#include <deque>
 #include <set>
 #include <algorithm>
 
 using namespace omnetpp;
 
 
+struct evCmp
+{
+    bool operator() (const cEvent* lhs, const cEvent* rhs) const
+    {
+        return lhs->getArrivalTime() < rhs->getArrivalTime();
+    }
+};
+
+
 struct DataStructure
 {
-    std::vector<std::vector<cEvent*>> data;
+    std::vector<std::multiset<cEvent*, evCmp>> data;
     int min_idx = -1;
     int size = 0;
 
     DataStructure()
     {
-        data.resize(1000);
-        for (int i = 0; i < 1000; i++)
-            data[i].reserve(4000);
+        data.resize(10000);
+//        for (int i = 0; i < 1000; i++)
+//            data[i].reserve(4000);
     }
 
     cEvent* peekFirst() const
     {
         if (min_idx >= 0)
-            return data[min_idx].back();
+            return (*data[min_idx].begin());
         else return nullptr;
     }
 
     void insert(cEvent* ev)
     {
         int evIdx = ev->getArrivalTime().inUnit(SIMTIME_S);
-        data[evIdx].push_back(ev);
+        data[evIdx].insert(ev);
         if (peekFirst() == nullptr || peekFirst()->getArrivalTime() > ev->getArrivalTime())
                 min_idx = evIdx;
         size++;
@@ -48,8 +58,8 @@ struct DataStructure
     cEvent* removeFirst()
     {
         if (min_idx == -1) return nullptr;
-        cEvent* ev = data[min_idx].back();
-        data[min_idx].pop_back();
+        cEvent* ev = (*data[min_idx].begin());
+        data[min_idx].erase(data[min_idx].begin());
         size--;
         if (size == 0) min_idx = -1;
         else
@@ -59,6 +69,28 @@ struct DataStructure
                     break;
         }
         return ev;
+    }
+
+    void remove(cEvent* ev)
+    {
+        if (min_idx == -1) return;
+        int evIdx = ev->getArrivalTime().inUnit(SIMTIME_S);
+
+        for (auto it = data[evIdx].begin(); it != data[evIdx].end(); it++)
+            if (*it == ev)
+            {
+                data[evIdx].erase(it);
+                break;
+            }
+
+        size--;
+        if (size == 0) min_idx = -1;
+        else if (min_idx == evIdx && data[evIdx].size() == 0)
+        {
+            for (; min_idx < data.size(); min_idx++)
+                if (data[min_idx].size())
+                    break;
+        }
     }
 
     int length() const{return size;}

@@ -124,13 +124,13 @@ void GlobalSimulationManager::PropagateMessageThroughNetwork(std::vector<int>& P
     for (int r : PendingRelayNodeVector) VisitedRelayNodes[r] = true;
 
     //initializing two stacks here (they will be processed as such)
-    std::deque<int> PendingRelayNodes(PendingRelayNodeVector.begin(), PendingRelayNodeVector.end());
-    std::deque<int> PendingPartNodes;
+    std::vector<int> PendingRelayNodes(PendingRelayNodeVector.begin(), PendingRelayNodeVector.end());
+    std::vector<int> PendingPartNodes;
 
 
-    std::deque<float> PendingPartNodeConnectionDelay;
-    std::deque<float> PendingRelayNodeConnectionDelay;
-    std::deque<float> AccumRelayDelay;
+    std::vector<float> PendingPartNodeConnectionDelay;
+    std::vector<float> PendingRelayNodeConnectionDelay;
+    std::vector<float> AccumRelayDelay;
 
 
     while(!PendingRelayNodes.empty())
