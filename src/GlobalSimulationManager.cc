@@ -48,13 +48,14 @@ void GlobalSimulationManager::initialize()
     LoadContextFromFiles(net, bal, pl);
 
 
-
-//    for (float i = 0.f; i < 200.f; i+= 10.f)
+//    scheduleAfter(3.39f, new cMessage(nullptr, 0));
+//    scheduleAfter(150.f, new cMessage(nullptr, 1));
+//    for (float i = 0.f; i < 200.f; i+= 8.f)
 //    {
-//        scheduleAfter(i+5.f, new cMessage(nullptr, 0));
-//        scheduleAfter(i+10.f, new cMessage(nullptr, 1));
+//        scheduleAfter(i+4.f, new cMessage(nullptr, 0));
+//        scheduleAfter(i+8.f, new cMessage(nullptr, 1));
 //    }
-    scheduleAfter(500, new cMessage(nullptr, 2));
+    scheduleAfter(999, new cMessage(nullptr, 255));
 
     StartTime = std::chrono::high_resolution_clock::now();
 }
@@ -345,7 +346,7 @@ void GlobalSimulationManager::AddAccountRecord(uint64_t address, uint64_t balanc
         NumberOfOnlineAccounts++;
 
         for (int id : partnodes)
-            Network.ParticipationNodes[id]->onlineAccounts.push_back(Account(address, balance));
+            Network.ParticipationNodes[id]->onlineAccounts.push_back(Account(address, balance, &BalanceMap[address]));
     }
     else for (int id : partnodes) Network.ParticipationNodes[id]->offlineAccounts.push_back(Account(address, balance));
 }
@@ -439,7 +440,12 @@ void GlobalSimulationManager::handleMessage(cMessage* msg)
 {
     if (msg->isSelfMessage()) //timeout event
     {
-        if (msg->getKind() == 0)
+        if (msg->getKind() == 2)
+        {
+//            SimulateRandomPayTransaction();
+            cancelAndDelete(msg);
+        }
+        else if (msg->getKind() == 0)
         {
             PartitionSimulationEvent pEv = PartitionSimulationEvent();
             pEv.ExecuteEvent();

@@ -24,7 +24,7 @@ void PartitionSimulationEvent::ExecuteEvent()
         cachedNetworkState.RelayNodes.push_back(relID);
 
 
-    int partMod = 10;
+    int partMod = 20;
 
     for (int i = 0; i < sim->Network.RelayNodes.size(); i++)
     {

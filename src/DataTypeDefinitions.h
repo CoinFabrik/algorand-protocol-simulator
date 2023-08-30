@@ -26,7 +26,7 @@ public:
     //TODO: keys
 
     BalanceRecord(){}
-    BalanceRecord(uint64_t rb, bool status):RawBalance(rb), OnlineStatus(status), OldBalance(0), OldStatus(true){}
+    BalanceRecord(uint64_t rb, bool status):RawBalance(rb), OnlineStatus(status), OldBalance(rb), OldStatus(status){}
 
     //cached for lookup
     uint64_t OldBalance;
@@ -112,7 +112,8 @@ struct VRFKeyPair
 
 struct Account
 {
-    Account(Address addr, uint64_t m):I(addr), Money(m){}
+    Account(Address addr, uint64_t m):I(addr), Money(m), BalanceMapPtr(nullptr){}
+    Account(Address addr, uint64_t m, class BalanceRecord* br):I(addr), Money(m), BalanceMapPtr(br){}
     Address I;
     uint64_t Money;
 

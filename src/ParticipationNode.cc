@@ -45,6 +45,12 @@ ParticipationNode::ParticipationNode() : round(1), period(0), step(0), lastConcl
     FastResyncEvent = new cMessage(nullptr, 253);
     TimeoutEvent = new cMessage(nullptr, 0);
 
+    TxnReceptionEvent = new cMessage(nullptr, 256);
+    VoteReceptionEvent = new cMessage(nullptr, 257);
+    ProposalReceptionEvent = new cMessage(nullptr, 258);
+    BundleReceptionEvent = new cMessage(nullptr, 259);
+
+
     WaitingForProposal = nullptr;
     FreshestBundle = nullptr;
     SigmaBundle = nullptr;
@@ -80,7 +86,8 @@ void ParticipationNode::initialize()
 void ParticipationNode::UpdateBalances()
 {
     for (Account& acc : onlineAccounts)
-        acc.Money = GlobalSimulationManager::SimManager->BalanceMap[acc.I].RawBalance;
+        acc.Money = acc.BalanceMapPtr->RawBalance;
+        //acc.Money = GlobalSimulationManager::SimManager->BalanceMap[acc.I].RawBalance;
 
 //    for (BalanceRecord& acc : offlineAccounts)
 //        acc.Money = GlobalSimulationManager::SimManager->BalanceMap[acc.I].RawBalance;
@@ -174,6 +181,8 @@ void ParticipationNode::handleMessage(cMessage* msg)
             OUT_LOG_STEP_EVENT();
 
             //schedule a soft vote
+            cancelEvent(TimeoutEvent);
+            cancelEvent(FastResyncEvent);
             TimeoutEvent->setKind(1);
             scheduleAfter(FilterTimeout(period), TimeoutEvent);
             //schedule a fast recovery attempt
@@ -192,6 +201,7 @@ void ParticipationNode::handleMessage(cMessage* msg)
             OUT_LOG_STEP_EVENT();
 
             TimeoutEvent->setKind(3);
+            cancelEvent(TimeoutEvent);
             scheduleAt(startTime + fmax(4.f * Lambda, UppercaseLambda), TimeoutEvent);
 
             SoftVote();
@@ -208,6 +218,7 @@ void ParticipationNode::handleMessage(cMessage* msg)
 
             OUT_LOG_STEP_EVENT();
 
+            cancelEvent(TimeoutEvent);
             //252 is the last next-vote. After this, its periodic cycles of late, recovery, redo
             if (msg->getKind() <= 251)
             {
@@ -223,6 +234,7 @@ void ParticipationNode::handleMessage(cMessage* msg)
             step = 255;
             OUT_LOG_STEP_EVENT();
 
+            cancelEvent(FastResyncEvent);
             scheduleAfter(LambdaF + 0, FastResyncEvent);
 
             FastRecovery();
@@ -284,6 +296,9 @@ void ParticipationNode::Broadcast(void* data, MsgType type)
 
 void ParticipationNode::Broadcast(Vote& vote)
 {
+    //a waiting node may only broadcast empty votes until they have observed the required proposal
+    if (WaitingForProposal && vote.v != EMPTY_PROPOSAL_VALUE) return;
+
     Vote* global_vote = GlobalSimulationManager::SimManager->AddCirculatingVote(&vote);
     GlobalSimulationManager::SimManager->PropagateMessageThroughNetwork(RelayConnections, getIndex(), (void*)(global_vote), VOTE);
 }
@@ -359,7 +374,7 @@ void ParticipationNode::HandleTransaction(Transaction* ReceivedTxn)
     else
     {
         //log transaction dropping event
-        EV << "TXN ID: " << ReceivedTxn->txnID << " DROPPED BY " << getIndex() << endl;
+//        EV << "TXN ID: " << ReceivedTxn->txnID << " DROPPED BY " << getIndex() << endl;
     }
 }
 
@@ -470,7 +485,7 @@ void ParticipationNode::HandleVote(Vote* ReceivedVote)
                 for (Account& a : onlineAccounts)
                 {
                     VRFOutput credentials;
-                    uint64_t accWeight = Sortition(a, TotalStake, CommitteeSize(2), credentials, 2);
+                    uint64_t accWeight = Sortition(a, CommitteeSize(2), credentials, round, period, 2);
 
                     if (accWeight > 0)
                     {
@@ -758,7 +773,7 @@ void ParticipationNode::BlockProposal()
     for (Account& a : onlineAccounts)
     {
         VRFOutput credentials;
-        uint64_t accWeight = Sortition(a, TotalStake, CommitteeSize(0), credentials, 0);
+        uint64_t accWeight = Sortition(a, CommitteeSize(0), credentials, round, period, 0);
 
         if (accWeight > 0)
         {
@@ -821,7 +836,7 @@ void ParticipationNode::SoftVote()
             for (Account& a : onlineAccounts)
             {
                 VRFOutput credentials;
-                uint64_t accWeight = Sortition(a, TotalStake, CommitteeSize(1), credentials, 1);
+                uint64_t accWeight = Sortition(a, CommitteeSize(1), credentials, round, period, 1);
                 if (accWeight == 0) continue;
 
                 Vote voteToCast(a.I, round, period, 1, v, credentials, accWeight);
@@ -834,7 +849,7 @@ void ParticipationNode::SoftVote()
         for (Account& a : onlineAccounts)
         {
             VRFOutput credentials;
-            uint64_t accWeight = Sortition(a, TotalStake, CommitteeSize(1), credentials, 1);
+            uint64_t accWeight = Sortition(a, CommitteeSize(1), credentials, round, period, 1);
             if (accWeight == 0) continue;
 
             Vote voteToCast(a.I, round, period, 1, pinnedValue, credentials, accWeight);
@@ -855,7 +870,7 @@ void ParticipationNode::NextVote()
     for (Account& a : onlineAccounts)
     {
         VRFOutput credentials;
-        uint64_t accWeight = Sortition(a, TotalStake, CommitteeSize(step), credentials, step);
+        uint64_t accWeight = Sortition(a, CommitteeSize(step), credentials, round, period, step);
         if (accWeight == 0) continue;
 
         Vote voteToCast(a.I, round, period, step, Sigma(), credentials, accWeight);
@@ -897,7 +912,7 @@ void ParticipationNode::FastRecovery()
         VRFOutput credentials;
         
         //late vote stuff and broadcast of observed votes
-        uint64_t accWeight = Sortition(a, TotalStake, CommitteeSize(253), credentials, 253);
+        uint64_t accWeight = Sortition(a, CommitteeSize(253), credentials, round, period, 253);
         if (accWeight > 0)
         {
             Vote voteToCast(a.I, round, period, 253, v, credentials, accWeight);
@@ -912,7 +927,7 @@ void ParticipationNode::FastRecovery()
         }
 
         //redo vote stuff and broadcast of observed votes
-        accWeight = Sortition(a, TotalStake, CommitteeSize(254), credentials, 254);
+        accWeight = Sortition(a, CommitteeSize(254), credentials, round, period, 254);
         if (accWeight > 0)
         {
             Vote voteToCast(a.I, round, period, 254, pinnedValue, credentials, accWeight);
@@ -927,7 +942,7 @@ void ParticipationNode::FastRecovery()
         }
 
         //down vote stuff and broadcast of observed votes
-        accWeight = Sortition(a, TotalStake, CommitteeSize(255), credentials, 255);
+        accWeight = Sortition(a, CommitteeSize(255), credentials, round, period, 255);
         if (accWeight > 0)
         {
             Vote voteToCast(a.I, round, period, 255, EMPTY_PROPOSAL_VALUE, credentials, accWeight);
@@ -1089,26 +1104,25 @@ VRFOutput ParticipationNode::RunVRF(Account& a, unsigned char* bytes, uint64_t b
  }
 
 
-uint64_t ParticipationNode::Sortition(Account& a, uint64_t totalMoney, double expectedSize, VRFOutput& cryptoDigest, short Step)
+uint64_t ParticipationNode::Sortition(Account& a, double expectedSize, VRFOutput& cryptoDigest, uint64_t s_round, uint64_t s_period, short s_step)
 {
 #if SIMULATE_VRF
     cryptoDigest = SimulateVRF();
 #else
     std::string seed = "2hfgrtyuj576dji38djshagry689olk0";
-    std::string role = std::to_string(round) + std::to_string(period) + std::to_string(step); //std::to_bytearray(round, period, step)
+    std::string role = std::to_string(s_round) + std::to_string(s_period) + std::to_string(s_step); //std::to_bytearray(round, period, step)
     std::string m = seed + role + std::to_string(a.I);
     cryptoDigest = RunVRF(a, (unsigned char*)(m.c_str()), m.length());
-//    for (int i = 0; i < 64; i++)
-//        EV << int(cryptoDigest.VRFHash[i]);
-//    EV << endl;
 #endif
+    uint64_t totalMoney = GlobalSimulationManager::SimManager->TotalStakedMicroalgos;
+    uint64_t accountMoney = a.BalanceMapPtr->OldBalance;
 
-    double binomialN = double(a.Money);
+    double binomialN = double(accountMoney);
     double binomialP = expectedSize / double(totalMoney);
     BigInt t = byte_array_to_cpp_int(cryptoDigest.VRFHash, 64);
     double ratio = (BigFloat(t) / two_to_the_hashlen).convert_to<double>();
 
-    return sortition_binomial_cdf_walk(binomialN, binomialP, ratio, a.Money);
+    return sortition_binomial_cdf_walk(binomialN, binomialP, ratio, accountMoney);
 }
 
 
@@ -1156,7 +1170,7 @@ LedgerEntry ParticipationNode::BlockAssembly()
 
 void ParticipationNode::ConfirmBlock(LedgerEntry& e)
 {
-     Ledger.Entries.push_back(e);
+    Ledger.Entries.push_back(e);
 
      for (Transaction* txn : e.Txns)
      {
@@ -1166,8 +1180,6 @@ void ParticipationNode::ConfirmBlock(LedgerEntry& e)
          if (it != TransactionPool.end())
              TransactionPool.erase(it);
      }
-
-
 }
 #endif
 

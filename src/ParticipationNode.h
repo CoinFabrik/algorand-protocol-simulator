@@ -27,7 +27,7 @@
 
 //logging defines
 #define LOG_STEP_EVENTS 1
-#define LOG_VOTES 1
+#define LOG_VOTES 0
 #define LOG_GLOBAL_BLOCKS 0
 
 
@@ -108,6 +108,10 @@ public:
     void handleMessage(cMessage* m);
     cMessage* FastResyncEvent;
     cMessage* TimeoutEvent;
+    cMessage* TxnReceptionEvent;
+    cMessage* VoteReceptionEvent;
+    cMessage* ProposalReceptionEvent;
+    cMessage* BundleReceptionEvent;
     SimTime startTime;
 
 
@@ -219,6 +223,14 @@ public:
     void ScheduleProposalHandling(float delay, ProposalPayload* pp);
     void ScheduleBundleHandling(float delay, Bundle& b);
 
+    struct TravelingTxn{SimTime ScheduleTime; Transaction* txn; };
+    struct TravelingVote{SimTime ScheduleTime; Vote* vt; };
+    struct TravelingProposal{SimTime ScheduleTime; ProposalPayload* pp; };
+    struct TravelingBundle{SimTime ScheduleTime; Transaction* b; };
+//    std::vector<TravelingTxn> TravelingTxnQueue;
+//    std::vector<TravelingVote> TravelingVoteQueue;
+//    std::vector<TravelingProposal> TravelingProposalQueue;
+//    std::vector<TravelingBundle> TravelingBundleQueue;
     std::vector<Transaction*> TravelingTxnQueue;
     std::vector<Vote*> TravelingVoteQueue;
     std::vector<ProposalPayload*> TravelingProposalQueue;
@@ -236,7 +248,7 @@ public:
     bool VerifyVRF(Account& a, unsigned char* bytes, uint64_t bytesLen, VRFOutput& HashAndProof);
 #endif
     uint64_t sortition_binomial_cdf_walk(double n, double p, double ratio, uint64_t money);
-    uint64_t Sortition(Account& a, uint64_t totalMoney, double expectedSize, VRFOutput& cryptoDigest, short step);
+    uint64_t Sortition(Account& a, double expectedSize, VRFOutput& cryptoDigest, uint64_t s_round, uint64_t s_period, short s_step);
     uint64_t VerifySortition();
     static BigFloat two_to_the_hashlen; //constant for sortition
 

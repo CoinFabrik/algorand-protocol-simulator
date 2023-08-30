@@ -139,6 +139,12 @@ public:
     void ScheduleTimedSimulationEvents();
 
 
+    //transaction periodic simulation
+    cMessage* TransactionCreationEvent;
+    void SimulateRandomPayTransaction();
+    void EnactTxnGenerationPolicy();
+
+
     //how many nodes are running round n
 //    std::unordered_map<uint64_t, uint64_t> NodesInRound;
 
