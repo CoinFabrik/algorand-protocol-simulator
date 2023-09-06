@@ -5,7 +5,6 @@ import data from './data.json'
 function Graph(): JSX.Element {
 
   const svgRef = useRef(null)
-  // const [svgGraph, setSvgGraph] = useState(null)
 
   const width = window.innerWidth*0.9
   const height = window.innerHeight*0.9
@@ -62,14 +61,20 @@ function Graph(): JSX.Element {
       .data(nodes)
       .join('circle')
       .attr('r', 5)
-      .attr('fill', '#000')
+      .attr('fill', (d: any) => {
+        if (d.type === 'participation') {
+          return 'red'
+        } else {
+          return 'blue'
+        }
+      })
 
     console.log(nodes)
 
     node.append('title')
-      .text((d: any) => d.id)
+      .text((d: any) => `${d.id} - ${d.type}`)
 
-    simulation.on('tick', () => {
+    simulation.on('tick', (): any => {
       link
         .attr('x1', (d: any) => d.source.x)
         .attr('y1', (d: any) => d.source.y) 
@@ -81,6 +86,33 @@ function Graph(): JSX.Element {
         .attr('cy', (d: any) => d.y)
     })
 
+    const drag = (simulation: any): any => {
+        
+      function dragstarted(event: any, d: any) {
+        if (!event.active) simulation.alphaTarget(0.3).restart()
+        d.fx = d.x
+        d.fy = d.y
+      }
+        
+      function dragged(event: any, d: any) {
+        d.fx = event.x
+        d.fy = event.y
+      }
+        
+      function dragended(event: any, d: any) {
+        if (!event.active) simulation.alphaTarget(0)
+        d.fx = null
+        d.fy = null
+      }
+        
+      return d3.drag()
+        .on('start', dragstarted)
+        .on('drag', dragged)
+        .on('end', dragended)
+    }
+
+    node.call(drag(simulation))
+    
   }, [])
 
   return (
