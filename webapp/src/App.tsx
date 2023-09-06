@@ -1,12 +1,17 @@
+import InputData from './pages/InputData'
+import {
+  BrowserRouter, Route, Routes,
+} from 'react-router-dom'
 import Graph from './pages/Graph'
-// import InputData from './pages/InputData'
 
 function App (): JSX.Element {
   return (
-    <>
-      <Graph />
-      {/* <InputData /> */}
-    </>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/Graph" element={<Graph />} />
+        <Route path="/" element={<InputData />} />
+      </Routes>
+    </BrowserRouter>
   )
 }
 
