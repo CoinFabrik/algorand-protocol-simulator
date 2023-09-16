@@ -63,6 +63,11 @@ ParticipationNode::~ParticipationNode()
 {
     cancelAndDelete(FastResyncEvent);
     cancelAndDelete(TimeoutEvent);
+
+    cancelAndDelete(TxnReceptionEvent);
+    cancelAndDelete(VoteReceptionEvent);
+    cancelAndDelete(ProposalReceptionEvent);
+    cancelAndDelete(BundleReceptionEvent);
 }
 
 
@@ -787,6 +792,7 @@ void ParticipationNode::BlockProposal()
 
                 if (BlockCreated)
                 {
+                    SetAddressDependantBlockData(e);
                     chosenProposal.I_orig = a.I;
                     chosenProposal.p_orig = period;
                 }
@@ -804,7 +810,6 @@ void ParticipationNode::BlockProposal()
         OUT_LOG_VOTE_EVENT(ChosenAccount, chosenProposal.d, chosenProposal.Cached.weight);
 
         Vote vt(ChosenAccount, round, period, 0, chosenProposal, chosenProposal.Cached.Credentials, chosenProposal.Cached.weight);
-//        Broadcast((void*)(&vt), VOTE);
         Broadcast(vt);
 
         if (BlockCreated)
@@ -813,12 +818,10 @@ void ParticipationNode::BlockProposal()
             pp.I_orig = chosenProposal.I_orig;
             pp.p_orig = chosenProposal.p_orig;
             pp.Cached.d = chosenProposal.d;
-//            Broadcast((void*)(&pp), PROPOSAL);
             Broadcast(pp);
         }
         else if (CachedFullProposals[GetPrevPeriodSlot()].count(chosenProposal.d))
         {
-//            Broadcast((void*)(&CachedFullProposals[GetPrevPeriodSlot()][chosenProposal.d]), PROPOSAL);
             Broadcast(*CachedFullProposals[GetPrevPeriodSlot()][chosenProposal.d]);
         }
     }
@@ -840,7 +843,6 @@ void ParticipationNode::SoftVote()
                 if (accWeight == 0) continue;
 
                 Vote voteToCast(a.I, round, period, 1, v, credentials, accWeight);
-//                Broadcast((void*)(&voteToCast), VOTE);
                 Broadcast(voteToCast);
             }
     }
@@ -853,7 +855,6 @@ void ParticipationNode::SoftVote()
             if (accWeight == 0) continue;
 
             Vote voteToCast(a.I, round, period, 1, pinnedValue, credentials, accWeight);
-//            Broadcast((void*)(&voteToCast), VOTE);
             Broadcast(voteToCast);
         }
     }
@@ -916,12 +917,7 @@ void ParticipationNode::FastRecovery()
         if (accWeight > 0)
         {
             Vote voteToCast(a.I, round, period, 253, v, credentials, accWeight);
-            if (bLateCondition) Broadcast(voteToCast); //Broadcast((void*)(&voteToCast), VOTE);
-//            for (Vote* vt : FastRecoveryVotes[0])
-//            {
-//                voteToCast.v = vt->v;
-//                Broadcast((void*)(&voteToCast), VOTE);
-//            }
+            if (bLateCondition) Broadcast(voteToCast);
 
             lastConcludingStep = 253;
         }
@@ -931,12 +927,7 @@ void ParticipationNode::FastRecovery()
         if (accWeight > 0)
         {
             Vote voteToCast(a.I, round, period, 254, pinnedValue, credentials, accWeight);
-            if (bRedoCondition) Broadcast(voteToCast); //Broadcast((void*)(&voteToCast), VOTE);
-//            for (auto& vt : FastRecoveryVotes[1])
-//            {
-//                voteToCast.v = vt->v;
-//                Broadcast((void*)(&voteToCast), VOTE);
-//            }
+            if (bRedoCondition) Broadcast(voteToCast);
 
             lastConcludingStep = 254;
         }
@@ -946,13 +937,7 @@ void ParticipationNode::FastRecovery()
         if (accWeight > 0)
         {
             Vote voteToCast(a.I, round, period, 255, EMPTY_PROPOSAL_VALUE, credentials, accWeight);
-            if (bDownCondition) Broadcast(voteToCast); //Broadcast((void*)(&voteToCast), VOTE);
-//            for (Vote* vt : FastRecoveryVotes[2])
-//            {
-//                voteToCast.v = vt->v;
-//                Broadcast((void*)(&voteToCast), VOTE);
-//            }
-
+            if (bDownCondition) Broadcast(voteToCast);
             lastConcludingStep = 255;
         }
     }
@@ -960,7 +945,6 @@ void ParticipationNode::FastRecovery()
     for (int i = 0; i < 3; i++)
         for (Vote* vt : FastRecoveryVotes[i])
         {
-//            Broadcast((void*)(vt), VOTE);
             Broadcast(*vt);
         }
 
@@ -982,8 +966,6 @@ bool ParticipationNode::IsCommitable(ProposalValue& v)
 
 void ParticipationNode::ResynchronizationAttempt()
 {
-
-    //VER! tema sortition aca...deberia correr esto por cuenta?
     if(FreshestBundle && FreshestBundle->votes.size())
     {
 
@@ -1031,18 +1013,19 @@ void ParticipationNode::ResynchronizationAttempt()
  #endif
 
 
-// void ParticipationNode::DeriveSeed(stSeedAndProof& SeedAndProof, Account& a, unsigned int period, unsigned int round)
-// {
+
+//void ParticipationNode::DeriveSeed(stSeedAndProof& SeedAndProof, Account& a, unsigned int period, unsigned int round)
+//{
 //     unsigned char* PrevSeed = nullptr; //uchar_ptr(Ledger.SeedLookup(currentRound - SeedLookback));
 //     unsigned char alpha[crypto_hash_sha256_BYTES];
-
+//
 //     //compute seed proof and preliminary hash
 //     if (period == 0)
 //     {
 //         VRFOutput VRFOutSeed = RunVRF(a, PrevSeed, 32);
 //         std::memcpy(&SeedAndProof.Seed, &VRFOutSeed.VRFHash[0], VRFOutSeed.VRFHash.length()); //VER. Por ahora, me quedo con los 32 bytes menos significativos
 //         std::memcpy(&SeedAndProof.Proof, &VRFOutSeed.VRFProof[0], VRFOutSeed.VRFProof.length());
-
+//
 //         std::string VRFConcatAddress = std::string(&VRFOutSeed.VRFHash[0], &VRFOutSeed.VRFHash[64]); //+ std::to_string(a.AccountAddress);
 //         Hash_SHA256(alpha, (unsigned char*)(VRFConcatAddress.c_str()), VRFConcatAddress.size());
 //     }
@@ -1051,23 +1034,21 @@ void ParticipationNode::ResynchronizationAttempt()
 //         ///SeedAndProof.Proof = {0};
 //         Hash_SHA256(alpha, PrevSeed, 32);
 //     }
-
+//
 //     //compute actual seed
 //     if (round % SeedLookback*SeedRefreshInterval < SeedLookback)
 //     {
 //         //std::string alphaConcatDigestLookup = std::string((char*)(alpha)) + std::string((char*)(Ledger.DigestLookup(round - SeedLookback*SeedRefreshInterval)));
 //         //DIGEST LOOKUP NO IMPLEMENTADA! Por ahora:
 //         std::string alphaConcatDigestLookup = std::string((char*)(alpha)) + std::string("00000000000000000000000000000000");
-
+//
 //         Hash_SHA256((unsigned char*)(SeedAndProof.Seed.c_str()), (unsigned char*)(alphaConcatDigestLookup.c_str()), alphaConcatDigestLookup.size());
 //     }
 //     else Hash_SHA256((unsigned char*)(SeedAndProof.Seed.c_str()), alpha, 32);
-
-
-
-
+//
 //     delete[] PrevSeed;
-// }
+//}
+
 
 #if !SIMULATE_VRF
 VRFOutput ParticipationNode::RunVRF(Account& a, unsigned char* bytes, uint64_t bytesLen)
@@ -1081,12 +1062,19 @@ VRFOutput ParticipationNode::RunVRF(Account& a, unsigned char* bytes, uint64_t b
     crypto_vrf_proof_to_hash(cryptoDigest.VRFHash, cryptoDigest.VRFProof);
     return cryptoDigest;
 }
-#endif
 
-// bool ParticipationNode::VerifyVRF(Account& a, unsigned char* bytes, uint64_t bytesLen, VRFOutput& HashAndProof)
-// {
-//     return crypto_vrf_verify(uchar_ptr(HashAndProof.VRFHash), a.VRFKeys.VRFPubKey, uchar_ptr(HashAndProof.VRFProof), bytes, bytesLen) == 0;
-// }
+
+bool ParticipationNode::VerifyVRF(Account& a, unsigned char* bytes, uint64_t bytesLen, VRFOutput& HashAndProof)
+{
+    return true;
+//    return crypto_vrf_verify(HashAndProof.VRFHash, a.VRFKeys.VRFPubKey, HashAndProof.VRFProof, bytes, bytesLen) == 0;
+}
+#else
+bool ParticipationNode::VerifyVRF(Account& a, unsigned char* bytes, uint64_t bytesLen, VRFOutput& HashAndProof)
+{
+    return true;
+}
+#endif
 
 
  uint64_t ParticipationNode::sortition_binomial_cdf_walk(double n, double p, double ratio, uint64_t money)
@@ -1110,12 +1098,12 @@ uint64_t ParticipationNode::Sortition(Account& a, double expectedSize, VRFOutput
     cryptoDigest = SimulateVRF();
 #else
     std::string seed = "2hfgrtyuj576dji38djshagry689olk0";
-    std::string role = std::to_string(s_round) + std::to_string(s_period) + std::to_string(s_step); //std::to_bytearray(round, period, step)
+    std::string role = std::to_string(s_round) + std::to_string(s_period) + std::to_string(s_step);
     std::string m = seed + role + std::to_string(a.I);
     cryptoDigest = RunVRF(a, (unsigned char*)(m.c_str()), m.length());
 #endif
     uint64_t totalMoney = GlobalSimulationManager::SimManager->TotalStakedMicroalgos;
-    uint64_t accountMoney = a.BalanceMapPtr->OldBalance;
+    uint64_t accountMoney = a.BalanceMapPtr->old.OldBalance;
 
     double binomialN = double(accountMoney);
     double binomialP = expectedSize / double(totalMoney);
@@ -1129,6 +1117,12 @@ uint64_t ParticipationNode::Sortition(Account& a, double expectedSize, VRFOutput
 uint64_t ParticipationNode::TotalStakedAlgos()
 {
     return GlobalSimulationManager::SimManager->TotalStakedMicroalgos;
+}
+
+
+void ParticipationNode::SetAddressDependantBlockData(LedgerEntry& e)
+{
+
 }
 
 
@@ -1192,6 +1186,7 @@ bool ParticipationNode::VerifyTransaction(Transaction* txn)
 
 bool ParticipationNode::VerifyVote(Vote* vt)
 {
+//    if (VerifyVRF(vt->))
     return true;
 }
 

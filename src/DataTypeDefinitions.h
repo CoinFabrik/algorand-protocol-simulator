@@ -23,16 +23,25 @@ public:
     uint64_t RawBalance;
     bool OnlineStatus;
 
-    //TODO: keys
+    unsigned char VRFPubKey[32];
 
     BalanceRecord(){}
-    BalanceRecord(uint64_t rb, bool status):RawBalance(rb), OnlineStatus(status), OldBalance(rb), OldStatus(status){}
+    BalanceRecord(uint64_t rb, bool status):RawBalance(rb), OnlineStatus(status)
+    {
+        old.OldBalance = rb;
+        old.OldStatus = status;
+    }
 
-    //cached for lookup
-    uint64_t OldBalance;
-    uint64_t OldStatus;
 
-    //TODO: old keys
+    //old cached stuff (for efficient lookup)
+    struct stOld
+    {
+        uint64_t OldBalance;
+        uint64_t OldStatus;
+
+        //TODO: OLD VOTING
+        unsigned char OldVRFPubKey[32];
+    }old;
 };
 
 
@@ -117,10 +126,30 @@ struct Account
     Address I;
     uint64_t Money;
 
+    //TODO: voting
+    //    struct stSecrets
+    //    {
+    //        //voting keys
+    //        //TODO
+    //
+    //        unsigned char VRFPrivKey[64];
+    //    }secrets;
     VRFKeyPair VRFKeys;
+
 
     //pointer to the balance map (useful for updating) all node managed accounts after finishing a round
     class BalanceRecord* BalanceMapPtr;
+
+
+    //old stuff cached for performance reasons
+    struct stOld
+    {
+        uint64_t OldBalance;
+        bool OldStatus;
+
+        //TODO voting
+        VRFKeyPair OldVRFKeys;
+    };
 };
 
 
@@ -174,7 +203,9 @@ struct LedgerEntry
     LedgerEntry(){LedgerEntryID = NEXT_ID++;}
     //header
     //TODO: ALL HEADER STUFF
-    stSeedAndProof SeedAndProof;
+//    stSeedAndProof SeedAndProof;
+    unsigned char Seed[32];
+    unsigned char SeedProof[32];
 
     //body
     std::vector<Transaction*> Txns;
@@ -208,7 +239,7 @@ struct Ledger
 
 
     bool ValidEntry(LedgerEntry e){return true; }
-    std::string SeedLookup(uint64_t round){return Entries[round>0? round : 0].SeedAndProof.Seed;}
+//    std::string SeedLookup(uint64_t round){return Entries[round>0? round : 0].SeedAndProof.Seed;}
     //TODO RecordLookup
     unsigned char* DigestLookup(uint64_t round){return Entries[round>0? round : 0].Digest();} //uint256_t DigestLookup(uint64_t round){return Entries[round].Digest();}
     //TODO TotalStakeLookup

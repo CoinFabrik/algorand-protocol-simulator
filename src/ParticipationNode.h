@@ -16,7 +16,7 @@
 #ifndef PARTICIPATIONNODE_H_
 #define PARTICIPATIONNODE_H_
 
-#define SIMULATE_VRF 1
+#define SIMULATE_VRF 0
 #define GLOBAL_BALANCE_TRACKER 1
 #define SIMPLIFIED_BLOCKS 0
 #define KEEP_GLOBAL_LEDGER 1
@@ -61,21 +61,21 @@ using namespace omnetpp;
 
 //logging of step events. Output is | "S" | node index | round | period | step number | simulation time | chronological time |
 #if LOG_STEP_EVENTS
-    #define OUT_LOG_STEP_EVENT() EV <<"S " << getIndex() << " " << round << " " << period << " "<< int(step) << " " << simTime() << " " << std::setprecision(15) << GlobalSimulationManager::SimManager->GetCurrentChronoTime().count() << endl
+    #define OUT_LOG_STEP_EVENT() EV <<"S " << getIndex() << " " << round << " " << period << " "<< int(step) << " " << std::setprecision(4) << simTime() << " " << GlobalSimulationManager::SimManager->GetCurrentChronoTime().count() << endl
 #else
     #define OUT_LOG_STEP_EVENT() ;
 #endif
 
 //logging of vote events. Output is | "V" | node index | round | period | step | account address | vote value (H(B)) | weight | simulation time | chronological time |
 #if LOG_VOTES
-    #define OUT_LOG_VOTE_EVENT(addr, val, weight) EV <<"V " << getIndex() << " " << round << " " << period << " "<< int(step) << " " << addr << " " << val << " " << weight << " " << simTime() << " " << std::setprecision(15) << GlobalSimulationManager::SimManager->GetCurrentChronoTime().count() << endl
+    #define OUT_LOG_VOTE_EVENT(addr, val, weight) EV <<"V " << getIndex() << " " << round << " " << period << " "<< int(step) << " " << addr << " " << val << " " << weight << " " << simTime() << " " << std::setprecision(4) << GlobalSimulationManager::SimManager->GetCurrentChronoTime().count() << endl
 #else
     #define OUT_LOG_VOTE_EVENT(addr, val, weight) ;
 #endif
 
 //logging of vote events. Output is | "B" | node index | account address | round | period | step | vote value (H(B)) | simulation time | chronological time |
 #if LOG_GLOBAL_BLOCKS
-    #define OUT_LOG_BLOCK_COMMITTED_GLOBAL_EVENT(round, block) EV <<"B " << round << " " << block.LedgerEntryID << " " << block.ProposerAddress << " " << block.Txns.size() << " " << simTime() << " " << std::setprecision(15) << GlobalSimulationManager::SimManager->GetCurrentChronoTime().count() << endl
+    #define OUT_LOG_BLOCK_COMMITTED_GLOBAL_EVENT(round, block) EV <<"B " << round << " " << block.LedgerEntryID << " " << block.ProposerAddress << " " << block.Txns.size() << " " << simTime() << " " << std::setprecision(4) << GlobalSimulationManager::SimManager->GetCurrentChronoTime().count() << endl
 #else
     #define OUT_LOG_BLOCK_COMMITTED_GLOBAL_EVENT(round, block) ;
 #endif
@@ -153,6 +153,7 @@ public:
 
     //round step functions
     LedgerEntry BlockAssembly();
+    void SetAddressDependantBlockData(LedgerEntry& e);
     void BlockProposal();
     uint64_t ComputeBlockHash(LedgerEntry& e);
 

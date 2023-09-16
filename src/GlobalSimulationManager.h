@@ -88,7 +88,7 @@ public:
 class GlobalSimulationManager : public cSimpleModule{
 public:
     GlobalSimulationManager();
-    virtual ~GlobalSimulationManager(){}
+    ~GlobalSimulationManager();
     void initialize();
 
     //singleton instance
@@ -174,6 +174,10 @@ public:
     struct Ledger GlobalLedger;
     void NodeStartedNewRound(ParticipationNode* caller, uint64_t RoundStarted);
     void UpdateBalanceMap(LedgerEntry* e);
+
+
+    //aux function to format output into json for visualization app
+    void FormatOutputIntoJson();
 };
 
 

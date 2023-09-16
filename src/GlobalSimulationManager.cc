@@ -42,6 +42,46 @@ GlobalSimulationManager::GlobalSimulationManager()
 }
 
 
+GlobalSimulationManager::~GlobalSimulationManager()
+{
+    //When destructing global sim manager, format output
+    FormatOutputIntoJson();
+}
+
+
+void GlobalSimulationManager::FormatOutputIntoJson()
+{
+    std::string file_name = "out.json";
+    std::ifstream readfile;
+    std::ofstream writefile;
+    readfile.open(file_name);
+
+    std::vector<std::string> buffer;
+
+    std::string line;
+    while (std::getline(readfile,line))
+        if (line[0] == '[')
+            buffer.push_back(line);
+
+    readfile.close();
+
+
+    writefile.open(file_name);
+
+    writefile << "{" << endl;
+    writefile << "\"data\":[" << endl;
+
+    for (int i = 0; i < buffer.size()-1; i++)
+    {
+        std::string l = buffer[i];
+        writefile << "\"" << l.substr(7, l.length() - 7) << "\","<< endl;
+    }
+    writefile << "\"" << buffer[buffer.size()-1].substr(7, buffer[buffer.size()-1].length() - 7) << "\""<< endl;
+    writefile << "]}";
+    writefile.close();
+}
+
+
 void GlobalSimulationManager::initialize()
 {
     std::string net("../test_network.nf"), bal("../test_balance.bf"), pl;
@@ -55,7 +95,7 @@ void GlobalSimulationManager::initialize()
 //        scheduleAfter(i+4.f, new cMessage(nullptr, 0));
 //        scheduleAfter(i+8.f, new cMessage(nullptr, 1));
 //    }
-    scheduleAfter(999, new cMessage(nullptr, 255));
+    scheduleAfter(10, new cMessage(nullptr, 255));
 
     StartTime = std::chrono::high_resolution_clock::now();
 }
@@ -417,8 +457,8 @@ void GlobalSimulationManager::UpdateBalanceMap(LedgerEntry* e)
         for (Transaction* txn : LookbackBlock.Txns)
         {
             //por ahora solo pay
-            GlobalSimulationManager::SimManager->BalanceMap[txn->Sender].OldBalance -= txn->Fee + txn->Amount;
-            GlobalSimulationManager::SimManager->BalanceMap[txn->Receiver].OldBalance += txn->Amount;
+            GlobalSimulationManager::SimManager->BalanceMap[txn->Sender].old.OldBalance -= txn->Fee + txn->Amount;
+            GlobalSimulationManager::SimManager->BalanceMap[txn->Receiver].old.OldBalance += txn->Amount;
         }
     }
 }

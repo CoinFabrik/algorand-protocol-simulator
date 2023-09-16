@@ -1,5 +1,5 @@
 #
-# OMNeT++/OMNEST Makefile for algorandprotocolsimulator
+# OMNeT++/OMNEST Makefile for algorand-protocol-simulator
 #
 # This file was generated with the command:
 #  opp_makemake -f --deep -I../dependencies/libsodium-fork/libsodium-win64/include -L../dependencies/libsodium-fork/libsodium-win64/bin -llibsodium-23
@@ -7,7 +7,7 @@
 
 # Name of target to be created (-o option)
 TARGET_DIR = .
-TARGET_NAME = algorandprotocolsimulator$(D)
+TARGET_NAME = algorand-protocol-simulator$(D)
 TARGET = $(TARGET_NAME)$(EXE_SUFFIX)
 TARGET_IMPLIB = $(TARGET_NAME)$(IMPLIB_SUFFIX)
 TARGET_IMPDEF = $(TARGET_NAME)$(IMPDEF_SUFFIX)
