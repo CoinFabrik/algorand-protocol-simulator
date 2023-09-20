@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useContext, useState } from 'react'
 import { Link } from 'react-router-dom'
+import Context  from '../context/Context'
 
 function InputData (): JSX.Element {
     // Get input data
@@ -27,13 +28,15 @@ function InputData (): JSX.Element {
         simulateVRF: 0,
     })
 
+    const { setContext } = useContext(Context)
+
     // Handle input data
     const handleData = (e: React.ChangeEvent<HTMLInputElement>) => {
         setData({
             ...data,
             [e.target.name]: e.target.value
         })
-        console.log(data)
+        // console.log(data)
     }
 
     const handleSimulate = () => {
@@ -62,14 +65,14 @@ function InputData (): JSX.Element {
             }
         }
 
-        const newNodeInfo = JSON.stringify(nodeInfo)
-        const dataBlobBalances = new Blob([newNodeInfo], { type: 'application/json' });
-        const blobURLBalances = URL.createObjectURL(dataBlobBalances);
-        const downloadLinkBalances = document.createElement('a')
-        downloadLinkBalances.href = blobURLBalances;
-        downloadLinkBalances.download = "test_balance.json";
-        downloadLinkBalances.click();
-        URL.revokeObjectURL(blobURLBalances);
+        // const newNodeInfo = JSON.stringify(nodeInfo)
+        // const dataBlobBalances = new Blob([newNodeInfo], { type: 'application/json' });
+        // const blobURLBalances = URL.createObjectURL(dataBlobBalances);
+        // const downloadLinkBalances = document.createElement('a')
+        // downloadLinkBalances.href = blobURLBalances;
+        // downloadLinkBalances.download = "test_balance.json";
+        // downloadLinkBalances.click();
+        // URL.revokeObjectURL(blobURLBalances);
 
         // 100 relays
         // 1000 participacion
@@ -104,15 +107,15 @@ function InputData (): JSX.Element {
         var networkSimulator = [[Number(data.participationNodes), Number(data.relayNodes)]]
 
         var networkInfo = {
-            "nodes": [{}],
-            "links": [{}]
+            "nodes": Array<{}>(),
+            "links": Array<{}>()
         }
 
         const relayNodesConected = Math.round(data.relayNodes*data.connectionDensity/100)
 
-        for (let i = 0; i < data.participationNodes; i++) {
+        for (let i = 1; i <= data.participationNodes; i++) {
             var connections = []
-            for (let j = 0; j < relayNodesConected; j++) {
+            for (let j = 1; j < relayNodesConected; j++) {
                 connections.push(Math.round(Math.random()*data.relayNodes+1))
                 connections.push(0)
                 connections.push(0)
@@ -131,7 +134,8 @@ function InputData (): JSX.Element {
             networkSimulator.push(connections)
         }
 
-        for (let i = 0; i < data.relayNodes; i++) {
+        // RESTAR UNO A LOS IDS DE LOS RELAY PARA QUE NO SE CONECTEN A SI MISMOS
+        for (let i = 1; i <= data.relayNodes; i++) {
             var connections = []
             for (let j = 0; j < relayNodesConected; j++) {
                 connections.push(Math.round(Math.random()*data.relayNodes+1))
@@ -152,24 +156,29 @@ function InputData (): JSX.Element {
             networkSimulator.push(connections)
         }
 
-        const newNetworkInfo = JSON.stringify(networkInfo)
-        const dataBlobNetwork = new Blob([newNetworkInfo], { type: 'application/json' });
-        const blobURLNetwork = URL.createObjectURL(dataBlobNetwork);
-        const downloadLinkNetwork = document.createElement('a')
-        downloadLinkNetwork.href = blobURLNetwork;
-        downloadLinkNetwork.download = "test_network.json";
-        downloadLinkNetwork.click();
-        URL.revokeObjectURL(blobURLNetwork);
+        // const newNetworkInfo = JSON.stringify(networkInfo)
+        // const dataBlobNetwork = new Blob([newNetworkInfo], { type: 'application/json' });
+        // const blobURLNetwork = URL.createObjectURL(dataBlobNetwork);
+        // const downloadLinkNetwork = document.createElement('a')
+        // downloadLinkNetwork.href = blobURLNetwork;
+        // downloadLinkNetwork.download = "test_network.json";
+        // downloadLinkNetwork.click();
+        // URL.revokeObjectURL(blobURLNetwork);
 
-        const newNetworkSimulator = JSON.stringify(networkSimulator)
-        const dataBlobNetworkSimulator = new Blob([newNetworkSimulator], { type: 'text/plain' });
-        const blobURLNetworkSimulator = URL.createObjectURL(dataBlobNetworkSimulator);
-        const downloadLinkNetworkSimulator = document.createElement('a')
-        downloadLinkNetworkSimulator.href = blobURLNetworkSimulator;
-        downloadLinkNetworkSimulator.download = "test_network_simulator.txt";
-        downloadLinkNetworkSimulator.click();
-        URL.revokeObjectURL(blobURLNetworkSimulator);
+        console.log(networkInfo)
+
+        setContext(networkInfo)
+
+        // const newNetworkSimulator = JSON.stringify(networkSimulator)
+        // const dataBlobNetworkSimulator = new Blob([newNetworkSimulator], { type: 'text/plain' });
+        // const blobURLNetworkSimulator = URL.createObjectURL(dataBlobNetworkSimulator);
+        // const downloadLinkNetworkSimulator = document.createElement('a')
+        // downloadLinkNetworkSimulator.href = blobURLNetworkSimulator;
+        // downloadLinkNetworkSimulator.download = "test_network_simulator.txt";
+        // downloadLinkNetworkSimulator.click();
+        // URL.revokeObjectURL(blobURLNetworkSimulator);
     }
+
 
   return (
     <div>
@@ -255,7 +264,7 @@ function InputData (): JSX.Element {
                 />
             </div>
             <div className="w-1/4">
-                <h2 className="text-center font-bold text-4xl">Consensous</h2>
+                <h2 className="text-center font-bold text-4xl">Consensus</h2>
                 <h3 className="text-center text-medium mt-5 mb-1">Commites Values</h3>
                 <input
                     className="ml-16 text-center pl-2 p-1 w-2/3 border-2 border-slate-300 rounded-xl"
