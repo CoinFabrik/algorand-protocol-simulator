@@ -181,7 +181,7 @@ function Graph(): JSX.Element {
 
     console.log(rounds)
     
-  }, [rounds.length])
+  }, [rounds.length, data])
 
   return (
     <div>
