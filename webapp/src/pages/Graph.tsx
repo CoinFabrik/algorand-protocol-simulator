@@ -61,7 +61,9 @@ function Graph (): JSX.Element {
     }
   })
 
-  const [outs, setOut] = useState<any[]>([])
+  const [outLog, setOutLog] = useState<any[]>([])
+
+  const outs: any = []
 
   function outData (): void {
     out.data.forEach((line: any) => {
@@ -71,12 +73,18 @@ function Graph (): JSX.Element {
         const block = lineSplit[2]
         const simulationTime = lineSplit[3]
         const realTime = lineSplit[4]
-        setOut([...outs, {
+        // setOut([...outs, {
+        //   round,
+        //   block,
+        //   simulationTime,
+        //   realTime
+        // }])
+        outs.push({
           round,
           block,
           simulationTime,
           realTime
-        }])
+        })
       }
     })
   }
@@ -103,6 +111,8 @@ function Graph (): JSX.Element {
 
   useEffect(() => {
     outData()
+
+    setOutLog(outs)
 
     // setRounds(outLog)
 
@@ -194,9 +204,11 @@ function Graph (): JSX.Element {
     node.call(drag(simulation))
 
     // console.log(rounds)
+    // console.log(outs[0].round)
+    // console.log(outs)
   }, [])
 
-  console.log(outs)
+  // console.log(outs)
 
   return (
     <div>
@@ -214,7 +226,7 @@ function Graph (): JSX.Element {
           </tr>
         </thead>
         <tbody>
-          {outs.map((round: any, index: number) => (
+          {outLog.map((round: any, index: number) => (
             <tr key={index}>
               <td className='border px-4 py-2'>{round.round}</td>
               <td className='border px-4 py-2'>{round.block}</td>

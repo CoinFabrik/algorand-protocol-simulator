@@ -1,6 +1,6 @@
 import InputData from './pages/InputData'
 import {
-  BrowserRouter, Route, Routes,
+  BrowserRouter, Route, Routes
 } from 'react-router-dom'
 import Graph from './pages/Graph'
 
