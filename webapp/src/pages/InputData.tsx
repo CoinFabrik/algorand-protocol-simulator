@@ -1,184 +1,183 @@
 import { useContext, useState } from 'react'
 import { Link } from 'react-router-dom'
-import Context  from '../context/Context'
+import Context from '../context/Context'
 
 function InputData (): JSX.Element {
-    // Get input data
-    const [data, setData] = useState({
-        relayNodes: 0,
-        participationNodes: 0,
-        relayConnectionDelay: 0,
-        connectionDensity: 0,
-        numberOfAccounts: 0,
-        totalSupplyOfAlgos: 0,
-        balanceInAlgos: 0,
-        accountsPerNode: 0,
-        onlineAccounts: 0,
-        commiteesValues: 0,
-        seedLookback: 0,
-        seedRefreshInterval: 0,
-        balanceLookback: 0,
-        lambda0: 0,
-        lambdaf: 0,
-        lambda: 0,
-        lambdam: 0,
-        finalizingCondition: 0,
-        transactionPoolLimit: 0,
-        ledgerCache: 0,
-        simulateVRF: 0,
+  // Get input data
+  const [data, setData] = useState({
+    relayNodes: 0,
+    participationNodes: 0,
+    relayConnectionDelay: 0,
+    connectionDensity: 0,
+    numberOfAccounts: 0,
+    totalSupplyOfAlgos: 0,
+    balanceInAlgos: 0,
+    accountsPerNode: 0,
+    onlineAccounts: 0,
+    commiteesValues: 0,
+    seedLookback: 0,
+    seedRefreshInterval: 0,
+    balanceLookback: 0,
+    lambda0: 0,
+    lambdaf: 0,
+    lambda: 0,
+    lambdam: 0,
+    finalizingCondition: 0,
+    transactionPoolLimit: 0,
+    ledgerCache: 0,
+    simulateVRF: 0
+  })
+
+  const { setContext } = useContext(Context)
+
+  // Handle input data
+  const handleData = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    setData({
+      ...data,
+      [e.target.name]: e.target.value
     })
+    // console.log(data)
+  }
 
-    const { setContext } = useContext(Context)
+  const handleSimulate = (): void => {
+    // address de cuenta - balance - status(online/ofline) - nodo
+    const nodeInfo = {
+      nodes: [{}],
+      links: [{}]
+    }
 
-    // Handle input data
-    const handleData = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setData({
-            ...data,
-            [e.target.name]: e.target.value
+    // create structure
+    if (data.participationNodes > 0) {
+      for (let i = 0; i < data.relayNodes; i++) {
+        nodeInfo.nodes.push({
+          id: i,
+          balance: data.balanceInAlgos / data.accountsPerNode,
+          status: 1,
+          node: i
         })
-        // console.log(data)
+      }
+      for (let i = 0; i < data.relayNodes; i++) {
+        nodeInfo.links.push({
+          source: i,
+          target: i + 1,
+          value: Math.round(Math.random() * 10 + 1)
+        })
+      }
     }
 
-    const handleSimulate = () => {
-        // address de cuenta - balance - status(online/ofline) - nodo
-        var nodeInfo = {
-            "nodes": [{}],
-            "links": [{}]
-        }
+    // const newNodeInfo = JSON.stringify(nodeInfo)
+    // const dataBlobBalances = new Blob([newNodeInfo], { type: 'application/json' });
+    // const blobURLBalances = URL.createObjectURL(dataBlobBalances);
+    // const downloadLinkBalances = document.createElement('a')
+    // downloadLinkBalances.href = blobURLBalances;
+    // downloadLinkBalances.download = "test_balance.json";
+    // downloadLinkBalances.click();
+    // URL.revokeObjectURL(blobURLBalances);
 
-        //create structure
-        if(data.participationNodes > 0) {
-            for (let i = 0; i < data.relayNodes; i++) {
-                nodeInfo["nodes"].push({
-                    "id": i,
-                    "balance": data.balanceInAlgos/data.accountsPerNode,
-                    "status": 1,
-                    "node": i
-                })
-            }
-            for (let i=0; i < data.relayNodes; i++) {
-                nodeInfo["links"].push({
-                    "source": i,
-                    "target": i+1,
-                    "value": Math.round(Math.random()*10+1)
-                })
-            }
-        }
+    // 100 relays
+    // 1000 participacion
+    // si es 50% de densidad de conexion
+    // cada nodo de participacion se conecta a 50 relays random
 
-        // const newNodeInfo = JSON.stringify(nodeInfo)
-        // const dataBlobBalances = new Blob([newNodeInfo], { type: 'application/json' });
-        // const blobURLBalances = URL.createObjectURL(dataBlobBalances);
-        // const downloadLinkBalances = document.createElement('a')
-        // downloadLinkBalances.href = blobURLBalances;
-        // downloadLinkBalances.download = "test_balance.json";
-        // downloadLinkBalances.click();
-        // URL.revokeObjectURL(blobURLBalances);
+    // cantidad de nodos - cantidad de nodos de relay
+    // 2000 120
 
-        // 100 relays
-        // 1000 participacion
-        // si es 50% de densidad de conexion
-        // cada nodo de participacion se conecta a 50 relays random
+    // cada nodo de participacion se puede conectar a los nodos relay que quiera
+    // nodo 0 (participacion-relay): 27 0 0 52 0 0 14 0 0 54 0 0
 
-        // cantidad de nodos - cantidad de nodos de relay
-        // 2000 120
-        
-        // cada nodo de participacion se puede conectar a los nodos relay que quiera
-        // nodo 0 (participacion-relay): 27 0 0 52 0 0 14 0 0 54 0 0 
+    // cada nodo de participacion se conecta a 4 relays
 
-        // cada nodo de participacion se conecta a 4 relays
+    // primer numero: id del relay
+    // segundo numero: delay de conexion de entrada
+    // tercer numero: delay de conexion de salida
+    // cuarto numero: id del nodo de relay de conexion
+    // quinto numero: delay de conexion de entrada
+    // sexto numero: delay de conexion de salida
+    // septimo numero: id del nodo de relay de conexion
 
-        // primer numero: id del relay
-        // segundo numero: delay de conexion de entrada
-        // tercer numero: delay de conexion de salida
-        // cuarto numero: id del nodo de relay de conexion
-        // quinto numero: delay de conexion de entrada
-        // sexto numero: delay de conexion de salida
-        // septimo numero: id del nodo de relay de conexion
+    // cuando conecto todos los nodos de participacion a los nodos de relay
+    // defino las conexiones de un relay a relay
+    // el relay 0 se conecta: 5 0  0  9 0  0  23 0  0  27 0  0  29 0  0  32 0  0  33 0  0  37 0  0  43 0  0  54 0  0  57 0  0  68 0  0  69 0  0  73 0  0  80 0  0  87 0  0  89 0  0  96 0  0
+    // (10-20 relays)
+    // id del nodo de relay
+    // no se conectan asi mismos ni repetidos
 
-        // cuando conecto todos los nodos de participacion a los nodos de relay
-        // defino las conexiones de un relay a relay
-        // el relay 0 se conecta: 5 0  0  9 0  0  23 0  0  27 0  0  29 0  0  32 0  0  33 0  0  37 0  0  43 0  0  54 0  0  57 0  0  68 0  0  69 0  0  73 0  0  80 0  0  87 0  0  89 0  0  96 0  0  
-        // (10-20 relays)
-        // id del nodo de relay
-        // no se conectan asi mismos ni repetidos
+    // Create network file
 
-        // Create network file
+    const networkSimulator = [[Number(data.participationNodes), Number(data.relayNodes)]]
 
-        var networkSimulator = [[Number(data.participationNodes), Number(data.relayNodes)]]
-
-        var networkInfo = {
-            "nodes": Array<{}>(),
-            "links": Array<{}>()
-        }
-
-        const relayNodesConected = Math.round(data.relayNodes*data.connectionDensity/100)
-
-        for (let i = 1; i <= data.participationNodes; i++) {
-            var connections = []
-            for (let j = 1; j < relayNodesConected; j++) {
-                connections.push(Math.round(Math.random()*data.relayNodes+1))
-                connections.push(0)
-                connections.push(0)
-
-                networkInfo["nodes"].push({
-                    "id": i,
-                    "type": "participation",
-                })
-
-                networkInfo["links"].push({
-                    "source": i,
-                    "target": connections[0],
-                    "value": 1
-                })
-            }
-            networkSimulator.push(connections)
-        }
-
-        // RESTAR UNO A LOS IDS DE LOS RELAY PARA QUE NO SE CONECTEN A SI MISMOS
-        for (let i = 1; i <= data.relayNodes; i++) {
-            var connections = []
-            for (let j = 0; j < relayNodesConected; j++) {
-                connections.push(Math.round(Math.random()*data.relayNodes+1))
-                connections.push(0)
-                connections.push(0)
-
-                networkInfo["nodes"].push({
-                    "id": i,
-                    "type": "relay",
-                })
-
-                networkInfo["links"].push({
-                    "source": i,
-                    "target": connections[0],
-                    "value": 1
-                })
-            }
-            networkSimulator.push(connections)
-        }
-
-        // const newNetworkInfo = JSON.stringify(networkInfo)
-        // const dataBlobNetwork = new Blob([newNetworkInfo], { type: 'application/json' });
-        // const blobURLNetwork = URL.createObjectURL(dataBlobNetwork);
-        // const downloadLinkNetwork = document.createElement('a')
-        // downloadLinkNetwork.href = blobURLNetwork;
-        // downloadLinkNetwork.download = "test_network.json";
-        // downloadLinkNetwork.click();
-        // URL.revokeObjectURL(blobURLNetwork);
-
-        console.log(networkInfo)
-
-        setContext(networkInfo)
-
-        // const newNetworkSimulator = JSON.stringify(networkSimulator)
-        // const dataBlobNetworkSimulator = new Blob([newNetworkSimulator], { type: 'text/plain' });
-        // const blobURLNetworkSimulator = URL.createObjectURL(dataBlobNetworkSimulator);
-        // const downloadLinkNetworkSimulator = document.createElement('a')
-        // downloadLinkNetworkSimulator.href = blobURLNetworkSimulator;
-        // downloadLinkNetworkSimulator.download = "test_network_simulator.txt";
-        // downloadLinkNetworkSimulator.click();
-        // URL.revokeObjectURL(blobURLNetworkSimulator);
+    const networkInfo = {
+      nodes: Array<Record<string, unknown>>(),
+      links: Array<Record<string, unknown>>()
     }
 
+    const relayNodesConected = Math.round(data.relayNodes * data.connectionDensity / 100)
+
+    for (let i = 1; i <= data.participationNodes; i++) {
+      const connections = []
+      for (let j = 1; j < relayNodesConected; j++) {
+        connections.push(Math.round(Math.random() * data.relayNodes + 1))
+        connections.push(0)
+        connections.push(0)
+
+        networkInfo.nodes.push({
+          id: i,
+          type: 'participation'
+        })
+
+        networkInfo.links.push({
+          source: i,
+          target: connections[0],
+          value: 1
+        })
+      }
+      networkSimulator.push(connections)
+    }
+
+    // RESTAR UNO A LOS IDS DE LOS RELAY PARA QUE NO SE CONECTEN A SI MISMOS
+    for (let i = 1; i <= data.relayNodes; i++) {
+      const connections = []
+      for (let j = 0; j < relayNodesConected; j++) {
+        connections.push(Math.round(Math.random() * data.relayNodes + 1))
+        connections.push(0)
+        connections.push(0)
+
+        networkInfo.nodes.push({
+          id: i,
+          type: 'relay'
+        })
+
+        networkInfo.links.push({
+          source: i,
+          target: connections[0],
+          value: 1
+        })
+      }
+      networkSimulator.push(connections)
+    }
+
+    // const newNetworkInfo = JSON.stringify(networkInfo)
+    // const dataBlobNetwork = new Blob([newNetworkInfo], { type: 'application/json' });
+    // const blobURLNetwork = URL.createObjectURL(dataBlobNetwork);
+    // const downloadLinkNetwork = document.createElement('a')
+    // downloadLinkNetwork.href = blobURLNetwork;
+    // downloadLinkNetwork.download = "test_network.json";
+    // downloadLinkNetwork.click();
+    // URL.revokeObjectURL(blobURLNetwork);
+
+    console.log(networkInfo)
+
+    setContext(networkInfo)
+
+    // const newNetworkSimulator = JSON.stringify(networkSimulator)
+    // const dataBlobNetworkSimulator = new Blob([newNetworkSimulator], { type: 'text/plain' });
+    // const blobURLNetworkSimulator = URL.createObjectURL(dataBlobNetworkSimulator);
+    // const downloadLinkNetworkSimulator = document.createElement('a')
+    // downloadLinkNetworkSimulator.href = blobURLNetworkSimulator;
+    // downloadLinkNetworkSimulator.download = "test_network_simulator.txt";
+    // downloadLinkNetworkSimulator.click();
+    // URL.revokeObjectURL(blobURLNetworkSimulator);
+  }
 
   return (
     <div>
@@ -191,7 +190,7 @@ function InputData (): JSX.Element {
                 <input
                     className="ml-16 text-center pl-2 p-1 w-2/3 border-2 border-slate-300 rounded-xl"
                     type='number'
-                    placeholder='7893' 
+                    placeholder='7893'
                     onChange={handleData}
                     name='relayNodes'
                 />
