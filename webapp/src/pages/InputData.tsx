@@ -37,7 +37,7 @@ function InputData (): JSX.Element {
       [e.target.name]: e.target.value
     })
     // console.log(data)
-    console.log(data.relayNodes)
+    console.log(data)
   }
 
   const handleSimulate = (): void => {
@@ -110,13 +110,13 @@ function InputData (): JSX.Element {
       })
     }
 
-    const totalPossibleConnectionsParticipation = data.participationNodes * data.relayNodes
+    const totalPossibleConnectionsParticipation = Number(data.participationNodes) * Number(data.relayNodes)
 
-    const quantityOfConnectionsParticipation = Math.round(totalPossibleConnectionsParticipation * (data.connectionDensity / 100))
+    const quantityOfConnectionsParticipation = Math.round(totalPossibleConnectionsParticipation * (Number(data.connectionDensity) / 100))
 
     const orderedParticipation: Array<Record<string, unknown>> = [{}]
 
-    for (let i = data.relayNodes; i < data.relayNodes + data.participationNodes; i++) {
+    for (let i = Number(data.relayNodes); i < Number(data.relayNodes) + Number(data.participationNodes); i++) {
       for (let j = 0; j < data.relayNodes; j++) {
         orderedParticipation.push({
           source: i,
@@ -140,14 +140,14 @@ function InputData (): JSX.Element {
 
     // NODES
 
-    for (let i = 0; i < data.relayNodes; i++) {
+    for (let i = 0; i < Number(data.relayNodes); i++) {
       networkInfo.nodes.push({
         id: i,
         type: 'relay'
       })
     }
 
-    for (let i = data.relayNodes; i < data.relayNodes + data.participationNodes; i++) {
+    for (let i = Number(data.relayNodes); i < Number(data.relayNodes) + Number(data.participationNodes); i++) {
       networkInfo.nodes.push({
         id: i,
         type: 'participation'
@@ -164,8 +164,6 @@ function InputData (): JSX.Element {
     URL.revokeObjectURL(blobURLNetwork)
 
     console.log(networkInfo)
-
-    console.log(data.relayNodes)
 
     setContext(networkInfo)
 
