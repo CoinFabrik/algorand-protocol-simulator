@@ -153,10 +153,10 @@ function Graph (): JSX.Element {
       .join('circle')
       .attr('r', 5)
       .attr('fill', (d: any) => {
-        if (d.type === 'participation') {
-          return 'red'
-        } else {
+        if (d.type === 'relay') {
           return 'blue'
+        } else {
+          return 'green'
         }
       })
 

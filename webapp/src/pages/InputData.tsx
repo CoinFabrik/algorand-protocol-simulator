@@ -37,42 +37,11 @@ function InputData (): JSX.Element {
       [e.target.name]: e.target.value
     })
     // console.log(data)
+    console.log(data.relayNodes)
   }
 
   const handleSimulate = (): void => {
     // address de cuenta - balance - status(online/ofline) - nodo
-    const nodeInfo = {
-      nodes: [{}],
-      links: [{}]
-    }
-
-    // create structure
-    if (data.participationNodes > 0) {
-      for (let i = 0; i < data.relayNodes; i++) {
-        nodeInfo.nodes.push({
-          id: i,
-          balance: data.balanceInAlgos / data.accountsPerNode,
-          status: 1,
-          node: i
-        })
-      }
-      for (let i = 0; i < data.relayNodes; i++) {
-        nodeInfo.links.push({
-          source: i,
-          target: i + 1,
-          value: Math.round(Math.random() * 10 + 1)
-        })
-      }
-    }
-
-    // const newNodeInfo = JSON.stringify(nodeInfo)
-    // const dataBlobBalances = new Blob([newNodeInfo], { type: 'application/json' });
-    // const blobURLBalances = URL.createObjectURL(dataBlobBalances);
-    // const downloadLinkBalances = document.createElement('a')
-    // downloadLinkBalances.href = blobURLBalances;
-    // downloadLinkBalances.download = "test_balance.json";
-    // downloadLinkBalances.click();
-    // URL.revokeObjectURL(blobURLBalances);
 
     // 100 relays
     // 1000 participacion
@@ -104,68 +73,99 @@ function InputData (): JSX.Element {
 
     // Create network file
 
-    const networkSimulator = [[Number(data.participationNodes), Number(data.relayNodes)]]
+    // const networkSimulator = [[Number(data.participationNodes), Number(data.relayNodes)]]
 
     const networkInfo = {
       nodes: Array<Record<string, unknown>>(),
       links: Array<Record<string, unknown>>()
     }
 
-    const relayNodesConected = Math.round(data.relayNodes * data.connectionDensity / 100)
+    // LINKS
 
-    for (let i = 1; i <= data.participationNodes; i++) {
-      const connections = []
-      for (let j = 1; j < relayNodesConected; j++) {
-        connections.push(Math.round(Math.random() * data.relayNodes + 1))
-        connections.push(0)
-        connections.push(0)
+    const totalPossibleConnectionsRelay = (data.relayNodes * (data.relayNodes - 1))
 
-        networkInfo.nodes.push({
-          id: i,
-          type: 'participation'
-        })
+    const quantityOfConnectionsRelay = Math.round(totalPossibleConnectionsRelay * (data.connectionDensity / 100))
 
-        networkInfo.links.push({
+    const orderedConnections: Array<Record<string, unknown>> = [{}]
+
+    for (let i = 0; i < data.relayNodes; i++) {
+      for (let j = i + 1; j < data.relayNodes; j++) {
+        orderedConnections.push({
           source: i,
-          target: connections[0],
-          value: 1
+          target: j
         })
       }
-      networkSimulator.push(connections)
     }
 
-    // RESTAR UNO A LOS IDS DE LOS RELAY PARA QUE NO SE CONECTEN A SI MISMOS
-    for (let i = 1; i <= data.relayNodes; i++) {
-      const connections = []
-      for (let j = 0; j < relayNodesConected; j++) {
-        connections.push(Math.round(Math.random() * data.relayNodes + 1))
-        connections.push(0)
-        connections.push(0)
+    const shuffledConnections = orderedConnections
+      .map(value => ({ value, sort: Math.random() }))
+      .sort((a, b) => a.sort - b.sort)
+      .map(({ value }) => value)
 
-        networkInfo.nodes.push({
-          id: i,
-          type: 'relay'
-        })
+    for (let i = 0; i < quantityOfConnectionsRelay; i++) {
+      networkInfo.links.push({
+        source: shuffledConnections[i].source,
+        target: shuffledConnections[i].target,
+        value: 1
+      })
+    }
 
-        networkInfo.links.push({
+    const totalPossibleConnectionsParticipation = data.participationNodes * data.relayNodes
+
+    const quantityOfConnectionsParticipation = Math.round(totalPossibleConnectionsParticipation * (data.connectionDensity / 100))
+
+    const orderedParticipation: Array<Record<string, unknown>> = [{}]
+
+    for (let i = data.relayNodes; i < data.relayNodes + data.participationNodes; i++) {
+      for (let j = 0; j < data.relayNodes; j++) {
+        orderedParticipation.push({
           source: i,
-          target: connections[0],
-          value: 1
+          target: j
         })
       }
-      networkSimulator.push(connections)
     }
 
-    // const newNetworkInfo = JSON.stringify(networkInfo)
-    // const dataBlobNetwork = new Blob([newNetworkInfo], { type: 'application/json' });
-    // const blobURLNetwork = URL.createObjectURL(dataBlobNetwork);
-    // const downloadLinkNetwork = document.createElement('a')
-    // downloadLinkNetwork.href = blobURLNetwork;
-    // downloadLinkNetwork.download = "test_network.json";
-    // downloadLinkNetwork.click();
-    // URL.revokeObjectURL(blobURLNetwork);
+    const shuffledConnectionsParticipation = orderedParticipation
+      .map(value => ({ value, sort: Math.random() }))
+      .sort((a, b) => a.sort - b.sort)
+      .map(({ value }) => value)
+
+    for (let i = 0; i < quantityOfConnectionsParticipation; i++) {
+      networkInfo.links.push({
+        source: shuffledConnectionsParticipation[i].source,
+        target: shuffledConnectionsParticipation[i].target,
+        value: 1
+      })
+    }
+
+    // NODES
+
+    for (let i = 0; i < data.relayNodes; i++) {
+      networkInfo.nodes.push({
+        id: i,
+        type: 'relay'
+      })
+    }
+
+    for (let i = data.relayNodes; i < data.relayNodes + data.participationNodes; i++) {
+      networkInfo.nodes.push({
+        id: i,
+        type: 'participation'
+      })
+    }
+
+    const newNetworkInfo = JSON.stringify(networkInfo)
+    const dataBlobNetwork = new Blob([newNetworkInfo], { type: 'application/json' })
+    const blobURLNetwork = URL.createObjectURL(dataBlobNetwork)
+    const downloadLinkNetwork = document.createElement('a')
+    downloadLinkNetwork.href = blobURLNetwork
+    downloadLinkNetwork.download = 'test_network.json'
+    downloadLinkNetwork.click()
+    URL.revokeObjectURL(blobURLNetwork)
 
     console.log(networkInfo)
+
+    console.log(data.relayNodes)
 
     setContext(networkInfo)
 
