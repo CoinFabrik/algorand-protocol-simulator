@@ -82,14 +82,14 @@ function InputData (): JSX.Element {
 
     // LINKS
 
-    const totalPossibleConnectionsRelay = (data.relayNodes * (data.relayNodes - 1))
+    const totalPossibleConnectionsRelay = (Number(data.relayNodes) * (Number(data.relayNodes) - 1))
 
-    const quantityOfConnectionsRelay = Math.round(totalPossibleConnectionsRelay * (data.connectionDensity / 100))
+    const quantityOfConnectionsRelay = Math.round(totalPossibleConnectionsRelay * (Number(data.connectionDensity) / 100))
 
     const orderedConnections: Array<Record<string, unknown>> = [{}]
 
-    for (let i = 0; i < data.relayNodes; i++) {
-      for (let j = i + 1; j < data.relayNodes; j++) {
+    for (let i = 0; i < Number(data.relayNodes); i++) {
+      for (let j = i + 1; j < Number(data.relayNodes); j++) {
         orderedConnections.push({
           source: i,
           target: j
