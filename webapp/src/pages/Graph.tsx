@@ -1,68 +1,30 @@
+/* out.log */
+
+// S 340 4 0 1 13.600000381468 8.9779329
+
+// S: Step Event
+// 340: ID del nodo
+// 4: Round
+// 0: Periodo (otra vuelta del protocolo cuando no confirmo el bloque)
+// 1: Status
+// 13.600000381468: Tiempo de simulacion
+// 8.9779329: Tiempo cronologico
+
+// G 2 405 3.400000095367 2.5861584
+
+// G: Global - ningun nodo en particular
+// 2: Current global round
+// 405: ID del bloque que genero ese cambio (hash del bloque)
+// 3.400000095367: Tiempo de simulacion
+// 2.5861584: Tiempo cronologico
+
 import { useEffect, useRef, useContext, useState } from 'react'
 import * as d3 from 'd3'
-// import Log from '../assets/out.ts'
 import Context from '../context/Context'
 import out from '../assets/out.json'
 
 function Graph (): JSX.Element {
-  const context = useContext(Context)
-
-  const data = context.context
-
-  // [INFO] S 1546 3 0 2 10.200000286101 6.0170131
-
-  // const [rounds, setRounds] = useState<any[]>([])
-
-  /* Metrica real aproximada de nodos */
-
-  // 300 Participation
-  // 120 Relays
-
-  /* out.log */
-
-  // S 340 4 0 1 13.600000381468 8.9779329
-
-  // S: Step Event
-  // 340: ID del nodo
-  // 4: Round
-  // 0: Periodo (otra vuelta del protocolo cuando no confirmo el bloque)
-  // 1: Status
-  // 13.600000381468: Tiempo de simulacion
-  // 8.9779329: Tiempo cronologico
-
-  // G 2 405 3.400000095367 2.5861584
-
-  // G: Global - ningun nodo en particular
-  // 2: Current global round
-  // 405: ID del bloque que genero ese cambio (hash del bloque)
-  // 3.400000095367: Tiempo de simulacion
-  // 2.5861584: Tiempo cronologico
-
-  // console.log(data)
-
-  const svgRef = useRef(null)
-
-  const width = window.innerWidth * 0.5
-  const height = window.innerHeight * 0.8
-
-  const nodes = data.nodes.map((node: any) => {
-    return {
-      ...node,
-      x: Math.random() * 800,
-      y: Math.random() * 800
-    }
-  })
-
-  const links = data.links.map((link: any) => {
-    return {
-      ...link,
-      source: link.source,
-      target: link.target
-    }
-  })
-
   const [outLog, setOutLog] = useState<any[]>([])
-
   const outs: any = []
 
   function outData (): void {
@@ -73,12 +35,6 @@ function Graph (): JSX.Element {
         const block = lineSplit[2]
         const simulationTime = lineSplit[3]
         const realTime = lineSplit[4]
-        // setOut([...outs, {
-        //   round,
-        //   block,
-        //   simulationTime,
-        //   realTime
-        // }])
         outs.push({
           round,
           block,
@@ -89,32 +45,36 @@ function Graph (): JSX.Element {
     })
   }
 
-  // const outLog: any = []
+  // Graph data
+  const context = useContext(Context)
+  const data = context.context
 
-  // function logSplit (): void {
-  //   Log.split('\n').forEach((line: any) => {
-  //     if (line.includes('G') && line.includes('[INFO]')) {
-  //       const lineSplit = line.split(' ')
-  //       const round = lineSplit[1]
-  //       const block = lineSplit[2]
-  //       const simulationTime = lineSplit[3]
-  //       const realTime = lineSplit[4]
-  //       outLog.push({
-  //         round,
-  //         block,
-  //         simulationTime,
-  //         realTime
-  //       })
-  //     }
-  //   })
-  // }
+  const svgRef = useRef(null)
+
+  // Width and height of the svg
+  const width = window.innerWidth * 0.5
+  const height = window.innerHeight * 0.8
 
   useEffect(() => {
+    // Log data
     outData()
-
     setOutLog(outs)
 
-    // setRounds(outLog)
+    const nodes = data.nodes.map((node: any) => {
+      return {
+        ...node,
+        id: node.id,
+        type: node.type
+      }
+    })
+
+    const links = data.links.map((link: any) => {
+      return {
+        ...link,
+        source: link.source,
+        target: link.target
+      }
+    })
 
     const margin = { top: 20, right: 20, bottom: 20, left: 20 }
 
@@ -134,8 +94,6 @@ function Graph (): JSX.Element {
       .force('link', d3.forceLink(links).id((d: any) => d.id))
       .force('charge', d3.forceManyBody().strength(-8))
       .force('center', d3.forceCenter(innerWidth / 2, innerHeight / 2))
-      // .force('x', d3.forceX().strength(0.01))
-      // .force('y', d3.forceY().strength(0.02))
 
     const link = g.append('g')
       .attr('stroke', '#999')
@@ -159,8 +117,6 @@ function Graph (): JSX.Element {
           return 'green'
         }
       })
-
-    // console.log(nodes.map((node: any) => node.type))
 
     node.append('title')
       .text((d: { id: string, type: string }) => `${d.id} - ${d.type}`)
@@ -202,13 +158,7 @@ function Graph (): JSX.Element {
     }
 
     node.call(drag(simulation))
-
-    // console.log(rounds)
-    // console.log(outs[0].round)
-    // console.log(outs)
   }, [])
-
-  // console.log(outs)
 
   return (
     <div>
