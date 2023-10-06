@@ -53,7 +53,7 @@ function Graph (): JSX.Element {
 
   // Width and height of the svg
   const width = window.innerWidth * 0.5
-  const height = window.innerHeight * 0.8
+  const height = window.innerHeight * 0.7
 
   useEffect(() => {
     // Log data
@@ -112,14 +112,64 @@ function Graph (): JSX.Element {
       .attr('r', 5)
       .attr('fill', (d: any) => {
         if (d.type === 'relay') {
-          return 'blue'
+          return 'red'
         } else {
-          return 'green'
+          return 'blue'
         }
       })
 
     node.append('title')
       .text((d: { id: string, type: string }) => `${d.id} - ${d.type}`)
+
+    // Create box on hover node with data
+    node.on('mouseover', (event: MouseEvent, d: { id: string, type: string }): any => {
+      const x: number = width - event.pageX
+      const y: number = height - event.pageY
+
+      d3.select('#tooltip')
+        .style('left', `${x}px`)
+        .style('top', `${y}px`)
+        .style('opacity', 1)
+        .select('#value')
+        .text(`${d.id} - ${d.type}`)
+        .style('color', 'black')
+        .style('font-size', '16px')
+    })
+
+    node.on('mouseout', (): any => {
+      d3.select('#tooltip')
+        .style('opacity', 0)
+    })
+
+    node.on('mousemove', (event: MouseEvent): any => {
+      const x: number = width - event.pageX
+      const y: number = height - event.pageY
+
+      d3.select('#tooltip')
+        .style('left', `${x}px`)
+        .style('top', `${y}px`)
+    }
+    )
+
+    // Tooltip
+    const tooltip = d3.select('body')
+      .append('div')
+      .attr('id', 'tooltip')
+      .style('opacity', 0)
+
+    tooltip.append('div')
+      .attr('id', 'value')
+      .style('font-size', '12px')
+      .style('font-weight', 'bold')
+      .style('padding', '5px 10px')
+      .style('background', 'white')
+      .style('border-radius', '5px')
+      .style('box-shadow', '2px 2px 5px rgba(0,0,0,0.3)')
+      .style('pointer-events', 'none')
+      .style('position', 'absolute')
+      .style('z-index', '10')
+      // center box
+      .style('left', '25%')
 
     simulation.on('tick', (): any => {
       link
