@@ -1,6 +1,19 @@
 #ifndef DATATYPEDEFINITIONS_H_
 #define DATATYPEDEFINITIONS_H_
 
+
+/*
+ * The following file contains definitions for most of the data structures and types
+ * used across the whole simulation.
+ * In some of them, a cached inner structure is used for simulation performance.
+ * This behavior does not reflect the real node's behavior, who would usually
+ * recompute these values every time they receive a new message. In a simulation
+ * we will know which actors are honest and which are not, and thus we are allowed
+ * to force recalculation only when relevant for the scenario being simulated,
+ * making significant performance gains.
+ */
+
+
 #include <vector>
 #include <boost/multiprecision/cpp_int.hpp>
 #include <boost/multiprecision/cpp_int.hpp>
@@ -205,7 +218,6 @@ struct LedgerEntry
     //TODO: ALL HEADER STUFF
 //    stSeedAndProof SeedAndProof;
     unsigned char Seed[32];
-    unsigned char SeedProof[32];
 
     //body
     std::vector<Transaction*> Txns;
@@ -216,6 +228,10 @@ struct LedgerEntry
 
 
     uint256_t cachedCredentialSVHash;
+    struct cached
+    {
+        unsigned char SeedProof[32];
+    }cached;
 
 
     unsigned char* Encoding()
@@ -239,7 +255,7 @@ struct Ledger
 
 
     bool ValidEntry(LedgerEntry e){return true; }
-//    std::string SeedLookup(uint64_t round){return Entries[round>0? round : 0].SeedAndProof.Seed;}
+    unsigned char* SeedLookup(uint64_t round){return Entries[round>0? round : 0].Seed;}
     //TODO RecordLookup
     unsigned char* DigestLookup(uint64_t round){return Entries[round>0? round : 0].Digest();} //uint256_t DigestLookup(uint64_t round){return Entries[round].Digest();}
     //TODO TotalStakeLookup

@@ -16,6 +16,10 @@
 #ifndef PARTICIPATIONNODE_H_
 #define PARTICIPATIONNODE_H_
 
+/*
+ *
+ */
+
 #define SIMULATE_VRF 0
 #define GLOBAL_BALANCE_TRACKER 1
 #define SIMPLIFIED_BLOCKS 0
@@ -29,6 +33,9 @@
 #define LOG_STEP_EVENTS 1
 #define LOG_VOTES 0
 #define LOG_GLOBAL_BLOCKS 0
+#define LOG_TXN_COMMITMENT 1
+
+#define COMPUTE_SEED 0
 
 
 //OMNET includes
@@ -49,6 +56,10 @@
 #if !SIMULATE_VRF
     #include <sodium.h>
     #include "sodium/crypto_vrf.h"
+    #include <openssl/evp.h>
+#endif
+
+#if COMPUTE_SEED
 #endif
 
 //boost includes
@@ -78,6 +89,19 @@ using namespace omnetpp;
     #define OUT_LOG_BLOCK_COMMITTED_GLOBAL_EVENT(round, block) EV <<"B " << round << " " << block.LedgerEntryID << " " << block.ProposerAddress << " " << block.Txns.size() << " " << simTime() << " " << std::setprecision(4) << GlobalSimulationManager::SimManager->GetCurrentChronoTime().count() << endl
 #else
     #define OUT_LOG_BLOCK_COMMITTED_GLOBAL_EVENT(round, block) ;
+#endif
+
+//logging of disconnection events. Output is | "D" | node1 index | node2 index | round | period | step | simulation time | chronological time |
+#if LOG_DISCONNECTION
+    #define OUT_LOG_DISCONNECTION_EVENT(node1, node2) EV <<"D " << node1 << " " << node2 << " " << round << " " << period << " "<< int(step) << " " << simTime() << " " << std::setprecision(4) << GlobalSimulationManager::SimManager->GetCurrentChronoTime().count() << endl
+#else
+    #define OUT_LOG_DISCONNECTION_EVENT(node1, node2) ;
+#endif
+
+#if LOG_TXN_COMMITMENT
+    #define OUT_LOG_TXN_COMMITMENT_EVENT(id, sender_addr, receiver_addr, amount) EV <<"T " << id << " " << sender_addr << " " << receiver_addr << " " << amount << " " << simTime() << " " << std::setprecision(4) << GlobalSimulationManager::SimManager->GetCurrentChronoTime().count() << endl
+#else
+    #define OUT_LOG_TXN_COMMITMENT_EVENT(sender_addr, receiver_addr, amount) ;
 #endif
 
 
@@ -129,6 +153,7 @@ public:
     std::vector<Account> offlineAccounts;
     std::vector<Account> onlineAccounts;
     Ledger Ledger;
+    void AddGenesisBlock();
 
 
 
@@ -153,7 +178,8 @@ public:
 
     //round step functions
     LedgerEntry BlockAssembly();
-    void SetAddressDependantBlockData(LedgerEntry& e);
+    void DeriveSeed(stSeedAndProof& SeedAndProof, Account& a, unsigned int period, unsigned int round);
+    void SetAddressDependantBlockData(LedgerEntry& e, Account* a);
     void BlockProposal();
     uint64_t ComputeBlockHash(LedgerEntry& e);
 

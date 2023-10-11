@@ -41,3 +41,4 @@ def createNetworkFile(nPartNodes, nRelayNodes):
 
 
 createNetworkFile(1600, 120)
+# createNetworkFile(900, 120)

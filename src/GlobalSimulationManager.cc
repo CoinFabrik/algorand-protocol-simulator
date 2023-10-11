@@ -90,12 +90,7 @@ void GlobalSimulationManager::initialize()
 
 //    scheduleAfter(3.39f, new cMessage(nullptr, 0));
 //    scheduleAfter(150.f, new cMessage(nullptr, 1));
-//    for (float i = 0.f; i < 200.f; i+= 8.f)
-//    {
-//        scheduleAfter(i+4.f, new cMessage(nullptr, 0));
-//        scheduleAfter(i+8.f, new cMessage(nullptr, 1));
-//    }
-    scheduleAfter(10, new cMessage(nullptr, 255));
+    scheduleAfter(250, new cMessage(nullptr, 255));
 
     StartTime = std::chrono::high_resolution_clock::now();
 }
@@ -430,7 +425,9 @@ void GlobalSimulationManager::NodeStartedNewRound(ParticipationNode* caller, uin
         GlobalLedger.Entries.push_back(caller->Ledger.Entries.back());
         UpdateBalanceMap(&GlobalLedger.Entries.back());
 
-        EV << "G " << CurrentGlobalRound << " " << GlobalLedger.Entries.back().LedgerEntryID << " "<< simTime() << " " << std::setprecision(15) << GetCurrentChronoTime().count() << endl;
+        EV << "G " << CurrentGlobalRound << " " << GlobalLedger.Entries.back().LedgerEntryID << " "<< simTime() << " " << std::setprecision(4) << GetCurrentChronoTime().count() << endl;
+        for (auto* txn : GlobalLedger.Entries.back().Txns)
+            OUT_LOG_TXN_COMMITMENT_EVENT(txn->txnID, txn->Sender, txn->Receiver, txn->Amount);
     }
 }
 

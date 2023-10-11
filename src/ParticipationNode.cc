@@ -56,6 +56,8 @@ ParticipationNode::ParticipationNode() : round(1), period(0), step(0), lastConcl
     SigmaBundle = nullptr;
     MuValue = EMPTY_PROPOSAL_VALUE;
     pinnedValue = EMPTY_PROPOSAL_VALUE;
+
+    AddGenesisBlock();
 }
 
 
@@ -756,9 +758,7 @@ void ParticipationNode::BlockProposal()
     uint256_t lowestCredHashValue = uint256_t(-1);
     uint64_t TotalStake = TotalStakedAlgos();
     Address ChosenAccount = 0;
-
     bool BlockCreated = false;
-    bool AtLeastOneAccountChosen = false;
 
 
     if (period == 0 || (FreshestBundle && FreshestBundle->votes[0]->v == EMPTY_PROPOSAL_VALUE))
@@ -775,6 +775,7 @@ void ParticipationNode::BlockProposal()
     else return;  //no specs. condition for proposal is met
 
 
+    Account* AccountChosen = nullptr;
     for (Account& a : onlineAccounts)
     {
         VRFOutput credentials;
@@ -782,7 +783,7 @@ void ParticipationNode::BlockProposal()
 
         if (accWeight > 0)
         {
-            AtLeastOneAccountChosen = true;
+            AccountChosen = &a;
 
             uint256_t accLowestHash = ComputeLowestCredValue(credentials, accWeight);
             if (lowestCredHashValue > accLowestHash)
@@ -792,7 +793,6 @@ void ParticipationNode::BlockProposal()
 
                 if (BlockCreated)
                 {
-                    SetAddressDependantBlockData(e);
                     chosenProposal.I_orig = a.I;
                     chosenProposal.p_orig = period;
                 }
@@ -803,9 +803,8 @@ void ParticipationNode::BlockProposal()
         }
     }
 
-
     //if at least one player was selected
-    if (AtLeastOneAccountChosen)
+    if (AccountChosen)
     {
         OUT_LOG_VOTE_EVENT(ChosenAccount, chosenProposal.d, chosenProposal.Cached.weight);
 
@@ -814,6 +813,8 @@ void ParticipationNode::BlockProposal()
 
         if (BlockCreated)
         {
+            SetAddressDependantBlockData(e, AccountChosen);
+
             ProposalPayload pp(round, e);
             pp.I_orig = chosenProposal.I_orig;
             pp.p_orig = chosenProposal.p_orig;
@@ -878,20 +879,11 @@ void ParticipationNode::NextVote()
         if (!IsCommitable(voteToCast.v))
         {
             if (period!=0 && FinishedBundles[GetPrevPeriodSlot()].count(EMPTY_PROPOSAL_VALUE.d) == 0 && FinishedBundles[GetPrevPeriodSlot()].count(pinnedValue.d) > 0)
-            {
-//                //TODO: chequear que period deberia ser p-1. Sino tambien hay algo muy mal
-//                if (FinishedBundles[pinnedValue.d][0].votes.size() ||
-//                    FinishedBundles[pinnedValue.d][1].votes.size() ||
-//                    FinishedBundles[pinnedValue.d][2].votes.size())
-//                    EV << "QUE PASO ACA!!!!!! Nunca podria ser 0, 1 o 2 el step. Algo esta muy mal :/";
-
                 voteToCast.v = pinnedValue;
-            }
             else voteToCast.v = EMPTY_PROPOSAL_VALUE;
         }
 
 //        EV << getIndex() << " STEP " << int(step) << " " << voteToCast.v.d << " BUNDLE_WEIGHT " << FinishedBundles[CurrentPeriodSlot][voteToCast.v.d][voteToCast.s].weight << endl;
-//        Broadcast((void*)(&voteToCast), VOTE);
         Broadcast(voteToCast);
     }
 
@@ -980,13 +972,13 @@ void ParticipationNode::ResynchronizationAttempt()
 }
 
 
-// void ParticipationNode::AddGenesisBlock()
-// {
-//     LedgerEntry e;
-//     //e.SeedAndProof.Seed = "hgyurteydhsjaskeudiaoapdlfkruiu9";
-//     Ledger.Entries.push_back(e);
-//     round = 1;
-// }
+void ParticipationNode::AddGenesisBlock()
+{
+    LedgerEntry e;
+    std::snprintf((char*)(e.Seed), 32, "hgyurteydhsjaskeudiaoapdlfkruiu9");
+    Ledger.Entries.push_back(e);
+    round = 1;
+}
 
 
  #if SIMULATE_VRF
@@ -995,11 +987,7 @@ void ParticipationNode::ResynchronizationAttempt()
      VRFOutput Out;
 //     generator.seed(100);
      uint256_t randomHash = generator();
-//     EV << randomHash << endl;
 
-//     EV << "STEP " << int(step) << " " << randomHash << endl;
-
-     //export_bits(randomHash, uchar_ptr(Out.VRFHash), 256);
      export_bits(randomHash, Out.VRFHash, 256);
 
      //get a proof that is just going to be either 0 or 1
@@ -1013,41 +1001,49 @@ void ParticipationNode::ResynchronizationAttempt()
  #endif
 
 
-
-//void ParticipationNode::DeriveSeed(stSeedAndProof& SeedAndProof, Account& a, unsigned int period, unsigned int round)
-//{
-//     unsigned char* PrevSeed = nullptr; //uchar_ptr(Ledger.SeedLookup(currentRound - SeedLookback));
+void ParticipationNode::DeriveSeed(stSeedAndProof& SeedAndProof, Account& a, unsigned int period, unsigned int round)
+{
+#if COMPUTE_SEED
+     unsigned char* PrevSeed = Ledger.SeedLookup(round - SeedLookback);
 //     unsigned char alpha[crypto_hash_sha256_BYTES];
+     unsigned char* alpha = nullptr;
 //
 //     //compute seed proof and preliminary hash
-//     if (period == 0)
-//     {
-//         VRFOutput VRFOutSeed = RunVRF(a, PrevSeed, 32);
-//         std::memcpy(&SeedAndProof.Seed, &VRFOutSeed.VRFHash[0], VRFOutSeed.VRFHash.length()); //VER. Por ahora, me quedo con los 32 bytes menos significativos
-//         std::memcpy(&SeedAndProof.Proof, &VRFOutSeed.VRFProof[0], VRFOutSeed.VRFProof.length());
-//
-//         std::string VRFConcatAddress = std::string(&VRFOutSeed.VRFHash[0], &VRFOutSeed.VRFHash[64]); //+ std::to_string(a.AccountAddress);
+     if (period == 0)
+     {
+         VRFOutput VRFOutSeed = RunVRF(a, PrevSeed, 32);
+         std::memcpy(&SeedAndProof.Seed, &VRFOutSeed.VRFHash[0], 32); //VER. Por ahora, me quedo con los 32 bytes menos significativos
+         std::memcpy(&SeedAndProof.Proof, &VRFOutSeed.VRFProof[0], 32);
+
+         alpha = SeedAndProof.Seed;
+
+//         std::string VRFConcatAddress = std::string(&VRFOutSeed.VRFHash[0], &VRFOutSeed.VRFHash[64]) + std::to_string(a.AccountAddress);
 //         Hash_SHA256(alpha, (unsigned char*)(VRFConcatAddress.c_str()), VRFConcatAddress.size());
-//     }
-//     else
-//     {
-//         ///SeedAndProof.Proof = {0};
+     }
+     else
+     {
+         SeedAndProof.Proof = {0};
+         alpha = PrevSeed;
+
 //         Hash_SHA256(alpha, PrevSeed, 32);
-//     }
-//
-//     //compute actual seed
-//     if (round % SeedLookback*SeedRefreshInterval < SeedLookback)
-//     {
+     }
+
+     //compute actual seed
+     if (round % (SeedLookback*SeedRefreshInterval) < SeedLookback)
+     {
 //         //std::string alphaConcatDigestLookup = std::string((char*)(alpha)) + std::string((char*)(Ledger.DigestLookup(round - SeedLookback*SeedRefreshInterval)));
 //         //DIGEST LOOKUP NO IMPLEMENTADA! Por ahora:
 //         std::string alphaConcatDigestLookup = std::string((char*)(alpha)) + std::string("00000000000000000000000000000000");
-//
+
 //         Hash_SHA256((unsigned char*)(SeedAndProof.Seed.c_str()), (unsigned char*)(alphaConcatDigestLookup.c_str()), alphaConcatDigestLookup.size());
-//     }
+     }
 //     else Hash_SHA256((unsigned char*)(SeedAndProof.Seed.c_str()), alpha, 32);
-//
-//     delete[] PrevSeed;
-//}
+#else
+     SeedAndProof.Proof[31] = 1;
+     uint256_t randomHash = generator();
+     export_bits(randomHash, uchar_ptr(SeedAndProof.Seed), 256);
+#endif
+}
 
 
 #if !SIMULATE_VRF
@@ -1120,9 +1116,9 @@ uint64_t ParticipationNode::TotalStakedAlgos()
 }
 
 
-void ParticipationNode::SetAddressDependantBlockData(LedgerEntry& e)
+void ParticipationNode::SetAddressDependantBlockData(LedgerEntry& e, Account* a)
 {
-
+//    e.Seed = DeriveSeed(SeedAndProof, a, period, round);
 }
 
 

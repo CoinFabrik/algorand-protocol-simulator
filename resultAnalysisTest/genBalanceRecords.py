@@ -37,7 +37,8 @@ def createBalanceFile(nAccounts, nOnlineAccounts, TotalBalance, nPartNodes):
         #     randomNum = np.random.normal(loc=TotalBalance/2, scale=TotalBalance/2)
         # bal = int(np.round(randomNum))
         bal = random.randint(1, int(2*TotalBalance/nAccounts))
-            
+        # bal = TotalBalance/(nAccounts)
+
         if bal < MIN_BALANCE:
             bal = MIN_BALANCE
         
@@ -70,28 +71,30 @@ def createBalanceFile(nAccounts, nOnlineAccounts, TotalBalance, nPartNodes):
     return accDict
 
 
-nAccounts =  300000 + 300 #30000 + 300 #10*200
-# accDict = createBalanceFile(nAccounts, nAccounts, 10*200*1000000 * 1e6, 200)
-accDict = createBalanceFile(nAccounts, 300, 1836000000 * 1e6, 1600)
+nAccounts =  300000 + 300
+accDict = createBalanceFile(nAccounts, 90, 1836000000 * 1e6, 1600)
+
+# nAccounts =  900
+# accDict = createBalanceFile(nAccounts, 900, 100000*2000, 900)
 
 
 
 
-import matplotlib.pyplot as plt
-import numpy as np
+# import matplotlib.pyplot as plt
+# import numpy as np
 
-sorted_dict = sorted(accDict.items(), key=lambda x:x[1])
-keys = [s[0] for s in sorted_dict]
-values = [s[1] for s in sorted_dict]
+# sorted_dict = sorted(accDict.items(), key=lambda x:x[1])
+# keys = [s[0] for s in sorted_dict]
+# values = [s[1] for s in sorted_dict]
 
   
-fig = plt.figure(figsize = (100, 5))
+# fig = plt.figure(figsize = (100, 5))
  
-# creating the bar plot
-plt.bar(list(range(0, len(values))), values, color ='maroon',
-        width = 0.4)
+# # creating the bar plot
+# plt.bar(list(range(0, len(values))), values, color ='maroon',
+#         width = 0.4)
  
-plt.xlabel("Accounts")
-plt.ylabel("Balance (microalgos)")
-plt.title("Starting balance distribution per account, sorted")
-plt.show()
+# plt.xlabel("Accounts")
+# plt.ylabel("Balance (microalgos)")
+# plt.title("Starting balance distribution per account, sorted")
+# plt.show()
