@@ -40,6 +40,8 @@ function InputData (): JSX.Element {
     console.log(data)
   }
 
+  // Actualizar el estado cuando hace click
+
   const handleSimulate = (): void => {
     // address de cuenta - balance - status(online/ofline) - nodo
 
@@ -139,7 +141,6 @@ function InputData (): JSX.Element {
     }
 
     // NODES
-
     for (let i = 0; i < Number(data.relayNodes); i++) {
       networkInfo.nodes.push({
         id: i,
@@ -375,11 +376,22 @@ function InputData (): JSX.Element {
                 />
             </div>
         </div>
-        <div className="text-right mr-16 text-white">
+        {/* <div className="text-right mr-16 text-white">
             <Link onClick={handleSimulate} to='/Graph' id='simulate' className="bg-blue-500 rounded-xl p-3">
                 Simulate &rarr;
             </Link>
-        </div>
+        </div> */}
+        {/** Add upload data json */}
+        <div className="text-right mr-16 text-white">
+            <input type="file"
+              className="text-md text-white file:mr-1 file:py-1 file:px-3 file:border-[0px] file:rounded-xl file:text-md file:font-medium file:bg-stone-50 file:text-stone-700 hover:file:cursor-pointer hover:file:bg-blue-50 hover:file:text-blue-700"
+            />
+            <button onClick={handleSimulate} id='simulate' className="ml-0 bg-blue-500 rounded-xl p-3">
+                Simulate &rarr;
+            </button>
+            {/* <Link onClick={handleSimulate} to='/Graph' id='simulate' className="bg-yellow-500 ml-3 rounded-xl p-3">
+            </Link> */}
+          </div>
     </div>
   )
 }

@@ -92,7 +92,8 @@ function Graph (): JSX.Element {
 
     const simulation = d3.forceSimulation(nodes)
       .force('link', d3.forceLink(links).id((d: any) => d.id))
-      .force('charge', d3.forceManyBody().strength(-8))
+      // Fuerza dinamica
+      .force('charge', d3.forceManyBody().strength(-10))
       .force('center', d3.forceCenter(innerWidth / 2, innerHeight / 2))
 
     const link = g.append('g')
@@ -216,22 +217,22 @@ function Graph (): JSX.Element {
       <h1 className='text-center mb-8 text-2xl font-light'>With data log</h1>
       <div className='inline-flex gap-20 ml-20'>
       <svg ref={svgRef} width={width} height={height} />
-      <table className='table-auto h-10'>
-        <thead>
-          <tr>
-            <th className='px-4 py-2'>Round</th>
-            <th className='px-4 py-2'>Block</th>
-            <th className='px-4 py-2'>Simulation Time</th>
-            <th className='px-4 py-2'>Real Time</th>
+      <table className='table-auto h-10 text-left w-1/2'>
+        <thead className='flex text-black w-full'>
+          <tr className='flex w-full mb-4'>
+            <th className='p-4 w-1/4'>Round</th>
+            <th className='p-4 w-1/4'>Block</th>
+            <th className='p-4 w-1/4'>Simulation Time</th>
+            <th className='p-4 w-1/4'>Real Time</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody className='flex flex-col items-center justify-between overflow-y-scroll w-full' style={{ height: '50vh' }}>
           {outLog.map((round: any, index: number) => (
-            <tr key={index}>
-              <td className='border px-4 py-2'>{round.round}</td>
-              <td className='border px-4 py-2'>{round.block}</td>
-              <td className='border px-4 py-2'>{Math.round(round.simulationTime * 10) / 10}s</td>
-              <td className='border px-4 py-2'>{Math.round(round.realTime * 100) / 100}s</td>
+            <tr key={index} className='flex w-full mb-4'>
+              <td className='border p-4 w-1/4'>{round.round}</td>
+              <td className='border p-4 w-1/4'>{round.block}</td>
+              <td className='border p-4 w-1/4'>{Math.round(round.simulationTime * 10) / 10}s</td>
+              <td className='border p-4 w-1/4'>{Math.round(round.realTime * 100) / 100}s</td>
             </tr>
           ))}
         </tbody>
